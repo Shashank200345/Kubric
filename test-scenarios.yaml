@@ -1,0 +1,117 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: test-agent-scenarios
+---
+# Scenario 1: CrashLoopBackOff (Missing Env Variable)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crashloop-demo
+  namespace: test-agent-scenarios
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: crashloop-demo
+  template:
+    metadata:
+      labels:
+        app: crashloop-demo
+    spec:
+      containers:
+      - name: crashloop-container
+        image: busybox:latest
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            if [ -z "$REQUIRED_VAR" ]; then
+              echo "Error: REQUIRED_VAR is not set. Crashing." >&2
+              exit 1
+            fi
+            echo "Running successfully..."
+            sleep 3600
+        # Notice REQUIRED_VAR is intentionally NOT provided in the env section
+---
+# Scenario 2: ImagePullBackOff (Invalid Image Tag)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: imagepull-demo
+  namespace: test-agent-scenarios
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: imagepull-demo
+  template:
+    metadata:
+      labels:
+        app: imagepull-demo
+    spec:
+      containers:
+      - name: invalid-image-container
+        image: nginx:this-tag-does-not-exist-12345
+        ports:
+        - containerPort: 80
+---
+# Scenario 3: OOMKilled (Memory Limit Exceeded)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oomkill-demo
+  namespace: test-agent-scenarios
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: oomkill-demo
+  template:
+    metadata:
+      labels:
+        app: oomkill-demo
+    spec:
+      containers:
+      - name: memory-hog
+        image: polinux/stress
+        command: ["stress"]
+        args: ["--vm", "1", "--vm-bytes", "150M", "--vm-hang", "1"]
+        resources:
+          limits:
+            memory: "50Mi" # Will be killed because it tries to use 150M
+          requests:
+            memory: "50Mi"
+---
+# Scenario 4: Service Selector Mismatch
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: selector-mismatch-deployment
+  namespace: test-agent-scenarios
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: actual-app-label
+  template:
+    metadata:
+      labels:
+        app: actual-app-label
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: selector-mismatch-service
+  namespace: test-agent-scenarios
+spec:
+  ports:
+  - port: 80
+    targetPort: 80
+  selector:
+    app: wrong-app-label # This intentionally does not match the deployment above
