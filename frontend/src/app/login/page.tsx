@@ -31,7 +31,7 @@ export default function LoginPage() {
         if (error) throw error;
         
         // Success - user is verified and logged in
-        router.push('/');
+        router.push('/dashboard');
       } else if (isSignUp) {
         // Handle Signup
         const { data, error } = await insforge.auth.signUp({
@@ -67,7 +67,7 @@ export default function LoginPage() {
         }
         
         // Navigate to dashboard
-        router.push('/');
+        router.push('/dashboard');
       }
     } catch (err: any) {
       setError(err.message || 'An error occurred during authentication.');
