@@ -2,7 +2,9 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
 import "./landing.css";
+import { Header } from "@/components/ui/header-2";
 
 export default function LandingPage() {
   const router = useRouter();
@@ -19,43 +21,7 @@ export default function LandingPage() {
   return (
     <div className="landing">
       {/* NAV */}
-      <header className="nav">
-        <div className="nav-inner">
-          <a className="brand" href="#">
-            <span className="brand-mark"></span>
-            <span className="brand-name">kubric</span>
-          </a>
-          <nav className="nav-links">
-            <a href="#product">Product</a>
-            <a href="#solutions">Solutions</a>
-            <a href="#infra">Infrastructure</a>
-            <a href="#docs">Docs</a>
-            <a href="#pricing">Pricing</a>
-          </nav>
-          <div className="nav-cta">
-            <a
-              className="link-muted"
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                router.push("/login");
-              }}
-            >
-              Sign in
-            </a>
-            <a
-              className="btn btn-primary"
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                router.push("/login");
-              }}
-            >
-              Get started →
-            </a>
-          </div>
-        </div>
-      </header>
+      <Header />
 
       {/* HERO */}
       <section className="hero">
@@ -76,31 +42,28 @@ export default function LandingPage() {
             Plug it into any cluster and stop firefighting at 3 AM.
           </p>
           <div className="hero-cta">
-            <a
-              className="btn btn-primary lg"
-              href="#"
+            <Button
+              size="lg"
+              className="font-semibold bg-primary text-primary-foreground rounded-full px-8 text-[15.5px]"
               onClick={(e) => {
                 e.preventDefault();
                 router.push("/login");
               }}
             >
               Start free →
-            </a>
-            <a className="btn btn-ghost lg" href="#">
+            </Button>
+            <Button 
+              size="lg" 
+              variant="outline" 
+              className="font-semibold rounded-full px-8 text-[15.5px] bg-transparent border-white/14 text-white hover:border-white hover:bg-transparent hover:text-white"
+              onClick={(e) => {
+                e.preventDefault();
+              }}
+            >
               Book a demo
-            </a>
+            </Button>
           </div>
-          <div className="hero-trust">
-            Trusted by platform teams at fast‑moving companies
-            <div className="logos">
-              <span>Northwind</span>
-              <span>Helios</span>
-              <span>Acme&nbsp;Cloud</span>
-              <span>Lumen</span>
-              <span>Forge.io</span>
-              <span>Quanta</span>
-            </div>
-          </div>
+
         </div>
 
         {/* Terminal mock */}

@@ -1,9 +1,9 @@
 /* ---------- landing page base ---------- */
 .landing {
-  --bg: #0a0b0d;
-  --bg-2: #0f1114;
-  --panel: #111316;
-  --line: rgba(255, 255, 255, 0.08);
+  --bg: #051008;
+  --bg-2: #0a1a0f;
+  --panel: #0d1e13;
+  --line: rgba(124, 255, 178, 0.08);
   --line-2: rgba(255, 255, 255, 0.14);
   --text: #e9edf1;
   --muted: #9aa3ad;
@@ -143,16 +143,16 @@
 }
 
 .landing .btn:hover {
-  transform: translateY(-1px);
+  /* removed transform to stop moving */
 }
 
 .landing .btn-primary {
-  background: var(--accent);
-  color: #06210f;
+  background: #0f5128;
+  color: #ffffff;
 }
 
 .landing .btn-primary:hover {
-  background: #9affc6;
+  background: #146c36;
 }
 
 .landing .btn-ghost {
@@ -173,7 +173,7 @@
 
 /* ---------- hero ---------- */
 .landing .hero {
-  padding: 30px 0 40px;
+  padding: 170px 0 30px;
   position: relative;
   overflow: hidden;
 }
@@ -185,7 +185,7 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  opacity: 1;
+  opacity: 0.7;
   z-index: 0;
   pointer-events: none;
 }
@@ -213,7 +213,7 @@
 .landing .hero-inner {
   position: relative;
   text-align: center;
-  padding: 0 0 40px;
+  padding: 0 0 24px;
   z-index: 2;
 }
 
@@ -238,36 +238,59 @@
 }
 
 .landing .display {
-  font-size: clamp(44px, 7vw, 88px);
-  line-height: 1.02;
-  letter-spacing: -0.03em;
-  font-weight: 800;
-  margin: 22px auto 18px;
-  max-width: 1000px;
+  font-family: var(--font-wix-madefor), "Inter", system-ui, sans-serif;
+  font-size: clamp(32px, 5vw, 64px);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  font-weight: 600;
+  margin: 16px auto 14px;
+  max-width: 900px;
 }
 
 .landing .grad {
+  position: relative;
   background: linear-gradient(100deg,
       var(--accent) 10%,
-      #cfeafc 50%,
-      var(--accent-2) 90%);
+      #ffffff 50%,
+      #7fee64 90%);
+  background-size: 200% auto;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  font-style: italic;
+  display: inline-block;
+}
+
+.landing .grad::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -6px;
+  height: 5px;
+  background: linear-gradient(90deg, var(--accent), #7fee64);
+  box-shadow: 0 0 12px var(--accent);
+  border-radius: 4px;
+  animation: draw-underline 1.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes draw-underline {
+  0% { width: 0; }
+  100% { width: 100%; }
 }
 
 .landing .lede {
-  max-width: 680px;
+  font-family: var(--font-wix-madefor), "Inter", system-ui, sans-serif;
+  max-width: 600px;
   margin: 0 auto;
   color: var(--muted);
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .landing .hero-cta {
   display: flex;
   gap: 14px;
   justify-content: center;
-  margin: 30px 0 40px;
+  margin: 24px 0 24px;
   flex-wrap: wrap;
 }
 
@@ -295,11 +318,13 @@
 /* terminal */
 .landing .terminal {
   margin-top: 20px;
-  border: 1px solid var(--line-2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 18px;
-  background: linear-gradient(180deg, #0e1013, #0a0c0f);
+  background: linear-gradient(135deg, rgba(124, 255, 178, 0.08) 0%, rgba(9, 26, 14, 0.75) 100%);
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
   box-shadow: 0 40px 100px -20px rgba(0, 0, 0, 0.8),
-    0 0 0 1px rgba(124, 255, 178, 0.08) inset;
+    0 0 0 1px rgba(124, 255, 178, 0.15) inset;
   overflow: hidden;
   transform: perspective(1200px) rotateX(4deg);
   transform-origin: top center;
@@ -314,8 +339,8 @@
   align-items: center;
   gap: 8px;
   padding: 12px 16px;
-  border-bottom: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .landing .tdot {
@@ -395,7 +420,7 @@
 }
 
 .landing .section.dim {
-  background: linear-gradient(180deg, #0c0e11, #0a0b0d);
+  background: linear-gradient(180deg, #08160c, #051008);
 }
 
 .landing .section-title {
@@ -547,7 +572,7 @@
 .landing .stripes {
   padding: 80px 0;
   border-top: 1px solid var(--line);
-  background: #0a0b0d;
+  background: #051008;
 }
 
 .landing .stripe-title {
@@ -753,7 +778,7 @@
 .landing .footer {
   border-top: 1px solid var(--line);
   padding: 70px 0 30px;
-  background: #08090b;
+  background: #040b05;
 }
 
 .landing .foot-grid {
