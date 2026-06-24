@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import "./landing.css";
 import { Header } from "@/components/ui/header-2";
+import ArchitectureFlow from "@/components/ArchitectureFlow";
+import InteractiveTerminal from "@/components/InteractiveTerminal";
+import EcosystemFlow from "@/components/EcosystemFlow";
 
 export default function LandingPage() {
   const router = useRouter();
@@ -66,92 +69,160 @@ export default function LandingPage() {
 
         </div>
 
-        {/* Terminal mock */}
+        {/* Terminal mock — interactive */}
         <div className="container">
-          <div className="terminal">
-            <div className="terminal-bar">
-              <span className="tdot r"></span>
-              <span className="tdot y"></span>
-              <span className="tdot g"></span>
-              <span className="tname">
-                kubric • incident #4821 • prod-us-east
-              </span>
-            </div>
-            <pre className="terminal-body">
-              <span className="c-mut">$</span>{" "}
-              <span className="c-cmd">kubric diagnose</span> --ns payments
-              --since 5m{"\n"}
-              <span className="c-mut">
-                → scanning 312 pods · 4 nodes · 17 services …
-              </span>
-              {"\n\n"}
-              <span className="c-ok">✓ root cause identified</span>{" "}
-              <span className="c-mut">(confidence 0.94)</span>
-              {"\n"}
-              <span className="c-key">pod</span>
-              {"      "}checkout-api-7df9c-xk2lq{"\n"}
-              <span className="c-key">status</span>
-              {"   "}CrashLoopBackOff × 23{"\n"}
-              <span className="c-key">cause</span>
-              {"    "}OOMKilled — memory limit 512Mi exceeded{"\n"}
-              {"            "}after deploy{" "}
-              <span className="c-warn">v1.42.0</span> (+38% heap usage)
-              {"\n\n"}
-              <span className="c-key">fix</span>
-              {"      "}bump resources.limits.memory → 768Mi{"\n"}
-              {"         "}and revert PR #2814 (leak in JsonCodec.flush)
-              {"\n\n"}
-              <span className="c-mut">apply now?</span>{" "}
-              <span className="c-cmd">[y/N]</span>{" "}
-              <span className="cursor">▍</span>
-            </pre>
-          </div>
+          <InteractiveTerminal />
         </div>
       </section>
 
-      {/* CAPABILITY GRID */}
+      {/* HOW IT WORKS — interactive investigation flow */}
+      <section className="section" id="how-it-works">
+        <div className="container">
+          <ArchitectureFlow />
+        </div>
+      </section>
+
+      {/* ECOSYSTEM — plugs into your stack */}
+      <section className="section dim" id="ecosystem">
+        <div className="container">
+          <div className="kicker" style={{ textAlign: 'center' }}>Connected</div>
+          <h2 className="section-title" style={{ textAlign: 'center', marginLeft: 'auto', marginRight: 'auto', marginBottom: '18px' }}>Plugs into your entire cluster stack.</h2>
+          <p className="muted" style={{ textAlign: 'center', maxWidth: '620px', margin: '0 auto 50px', fontSize: '16px' }}>
+            One agent, every layer of your platform — orchestration, packaging, and observability, working together.
+          </p>
+          <EcosystemFlow />
+        </div>
+      </section>
+
+      {/* CAPABILITY LIST — pods.ml-style layout */}
       <section className="section" id="product">
         <div className="container">
-          <h2 className="section-title">
-            The autonomous platform for cluster reliability.
+          <div className="pods-head">
+            <span className="pods-head-label"><span className="sq" /> The platform</span>
+            <span className="pods-head-line" />
+            <span className="pods-head-count">4 pillars</span>
+          </div>
+          <h2 className="pods-title">
+            The autonomous platform. <em>Built to scale.</em>
           </h2>
-          <div className="cap-grid">
-            <article className="cap">
-              <div className="cap-tag">Kubric Agent</div>
-              <h3>Your SRE, in code.</h3>
-              <p>
-                Connect your cluster with a single Helm command. Kubric reads
-                events, logs, metrics, and traces — and reasons across them like
-                a senior engineer.
-              </p>
-            </article>
-            <article className="cap">
-              <div className="cap-tag">AI‑native runtime</div>
-              <h3>Built for speed, at incident scale.</h3>
-              <p>
-                Sub‑second triage across thousands of pods. Parallel inference
-                over your telemetry, with answers grounded in your actual cluster
-                state.
-              </p>
-            </article>
-            <article className="cap">
-              <div className="cap-tag">Elastic coverage</div>
-              <h3>From one cluster to one thousand.</h3>
-              <p>
-                Multi‑cluster, multi‑cloud, multi‑region. Kubric routes
-                investigations across fleets in real time — no agents to
-                babysit, no quotas to plan.
-              </p>
-            </article>
-            <article className="cap">
-              <div className="cap-tag">Production ready</div>
-              <h3>Observability you can trust.</h3>
-              <p>
-                Every diagnosis is auditable, with full timelines, evidence, and
-                the queries Kubric ran. SOC 2 Type II, read‑only by default,
-                fix‑on‑approval.
-              </p>
-            </article>
+          <div className="pods-list">
+            {[
+              {
+                idx: "01",
+                name: "Your SRE, in code",
+                cat: "Agent",
+                desc: "Connect your cluster with a single Helm command — Kubric reasons across events, logs, metrics, and traces like a senior engineer.",
+                cmd: "$ kubric connect --cluster prod",
+                fields: [
+                  { k: "Setup", v: "1 Helm cmd" },
+                  { k: "Signals", v: "logs · metrics" },
+                  { k: "Mode", v: "Autonomous" },
+                  { k: "Latency", v: "Real-time" },
+                  { k: "Scope", v: "Cluster-wide" },
+                ],
+                note: "Reads events, logs, metrics, and traces — and reasons across them to find the real cause, not just the symptom.",
+                deploy: "Deploy the agent",
+              },
+              {
+                idx: "02",
+                name: "Built for incident scale",
+                cat: "Runtime",
+                desc: "Sub-second triage across thousands of pods, with parallel inference grounded in your actual cluster state.",
+                cmd: "$ kubric triage --ns payments",
+                fields: [
+                  { k: "Triage", v: "Sub-second" },
+                  { k: "Inference", v: "Parallel" },
+                  { k: "Throughput", v: "1000s pods" },
+                  { k: "Grounding", v: "Live state" },
+                  { k: "Models", v: "Ensemble" },
+                ],
+                note: "Parallel inference over your telemetry, with answers grounded in the real state of the cluster — never a hallucinated guess.",
+                deploy: "See it run",
+              },
+              {
+                idx: "03",
+                name: "From one to one thousand",
+                cat: "Coverage",
+                desc: "Multi-cluster, multi-cloud, multi-region — Kubric routes investigations across fleets in real time.",
+                cmd: "$ kubric fleet add eks-us-east",
+                fields: [
+                  { k: "Clusters", v: "Unlimited" },
+                  { k: "Clouds", v: "Any" },
+                  { k: "Regions", v: "Global" },
+                  { k: "Agents", v: "Zero" },
+                  { k: "Routing", v: "Real-time" },
+                ],
+                note: "No agents to babysit, no quotas to plan. One control plane spans every cluster across every cloud and region.",
+                deploy: "Connect a fleet",
+              },
+              {
+                idx: "04",
+                name: "Observability you can trust",
+                cat: "Trust",
+                desc: "Every diagnosis is auditable — full timelines, evidence, and the exact queries Kubric ran.",
+                cmd: "$ kubric audit incident-4821",
+                fields: [
+                  { k: "Audit", v: "Full trail" },
+                  { k: "Compliance", v: "SOC 2" },
+                  { k: "Access", v: "Read-only" },
+                  { k: "Fixes", v: "On approval" },
+                  { k: "Evidence", v: "Linked" },
+                ],
+                note: "SOC 2 Type II, read-only by default, fix-on-approval. Every claim links back to the log line or metric behind it.",
+                deploy: "Review the trail",
+              },
+            ].map((row) => (
+              <div className="pod-row" key={row.idx}>
+                <div className="pod-row-head">
+                  <div className="pod-idx">
+                    {row.idx} <span className="dot" />
+                  </div>
+                  <div className="pod-main">
+                    <h3 className="pod-name">
+                      {row.name} <span className="pod-cat">{row.cat}</span>
+                    </h3>
+                    <p className="pod-desc">{row.desc}</p>
+                  </div>
+                </div>
+                <div className="pod-detail">
+                  <div className="pod-detail-inner">
+                    <div className="pod-detail-grid">
+                      <div className="pod-hero">
+                        <div className="pod-hero-top">
+                          <span className="pod-hero-tag">{row.cat}</span>
+                          <span className="pod-live">
+                            <span className="pod-live-dot" /> Live
+                          </span>
+                        </div>
+                        <div className="pod-hero-title">{row.name}</div>
+                        <div className="pod-hero-cmd">{row.cmd}</div>
+                      </div>
+                      <div className="pod-detail-right">
+                        <p className="pod-detail-lead">{row.desc}</p>
+                        <div className="pod-detail-meta">
+                          {row.fields.map((f) => (
+                            <div className="pod-field" key={f.k}>
+                              <span className="k">{f.k}</span>
+                              <span className="v">{f.v}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="pod-detail-foot">
+                          <p className="pod-detail-note">{row.note}</p>
+                          <a
+                            className="pod-cta"
+                            href="#"
+                            onClick={(e) => e.preventDefault()}
+                          >
+                            {row.deploy} →
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </section>

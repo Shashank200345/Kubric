@@ -6,3 +6,9 @@ node_modules/
 __pycache__/
 *.pyc
 .insforge/
+
+# personal / media files (not part of the app)
+*.pdf
+*.jpeg
+*.jpg
+*.mp4
