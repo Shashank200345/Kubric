@@ -155,20 +155,19 @@ export default function ArchitectureFlow() {
         }
         .af-step-done { opacity: 0.78; }
         .af-step-num {
-          width: 30px; height: 30px; border-radius: 10px; flex-shrink: 0;
-          display: flex; align-items: center; justify-content: center;
-          font-size: 12.5px; font-weight: 600; font-family: "JetBrains Mono", monospace;
-          color: #6b727b; background: rgba(255,255,255,0.04);
-          border: 1px solid rgba(255,255,255,0.1);
-          transition: all .45s ease;
+          display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0;
+          font-family: "JetBrains Mono", monospace; font-size: 15px; font-weight: 600;
+          letter-spacing: 0.02em;
+          color: #5f6770; background: none; border: none; box-shadow: none;
+          transition: color .45s ease;
         }
-        .af-step-active .af-step-num {
-          color: #051008; background: linear-gradient(140deg, #7cffb2, #9b8cff);
-          border-color: transparent; box-shadow: 0 0 18px -2px rgba(124,255,178,0.6);
+        .af-step-num .sq {
+          width: 7px; height: 7px; display: inline-block; background: currentColor;
+          transition: box-shadow .45s ease;
         }
-        .af-step-done .af-step-num {
-          color: #7cffb2; background: rgba(124,255,178,0.1); border-color: rgba(124,255,178,0.3);
-        }
+        .af-step-active .af-step-num { color: #7cffb2; }
+        .af-step-active .af-step-num .sq { box-shadow: 0 0 9px #7cffb2; }
+        .af-step-done .af-step-num { color: rgba(124,255,178,0.55); }
         .af-step h4 {
           margin: 4px 0 3px; font-size: 14px; font-weight: 500; letter-spacing: -0.01em; color: #e9edf1;
           display: flex; align-items: center; gap: 7px;
@@ -317,9 +316,7 @@ export default function ArchitectureFlow() {
             return (
               <div key={i} className={`af-step ${state === 'active' ? 'af-step-active' : ''} ${state === 'done' ? 'af-step-done' : ''}`}>
                 <div className="af-step-num">
-                  {state === 'done'
-                    ? <i className="ti ti-check" style={{ fontSize: 14 }} aria-hidden="true" />
-                    : i + 1}
+                  {`0${i + 1}`}<span className="sq" />
                 </div>
                 <div>
                   <h4>
