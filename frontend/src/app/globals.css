@@ -44,3 +44,10 @@ body {
   color: var(--foreground);
   font-family: var(--font-thicccboi), system-ui, -apple-system, sans-serif;
 }
+
+/* Sharp corners across the entire app — no rounded/curved edges anywhere */
+*,
+*::before,
+*::after {
+  border-radius: 0 !important;
+}

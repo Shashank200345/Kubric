@@ -1,6 +1,5 @@
 'use client';
 import React from 'react';
-import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { MenuToggleIcon } from '@/components/ui/menu-toggle-icon';
 import { useScroll } from '@/components/ui/use-scroll';
@@ -37,16 +36,15 @@ export function Header() {
 		>
 			<nav
 				className={cn(
-					'flex h-16 w-full items-center justify-between px-6 md:h-14 md:transition-all md:ease-out',
+					'flex h-20 w-full items-center justify-between px-6 md:h-20 md:transition-all md:ease-out mt-2',
 					{
 						'md:px-8': scrolled,
 					},
 				)}
 			>
 				<div className="flex flex-1 items-center justify-start">
-					<a className="brand" href="/" style={{ textDecoration: 'none', color: 'inherit' }}>
-						<span className="brand-mark"></span>
-						<span className="brand-name">kubric</span>
+					<a className="brand" href="/" style={{ textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center' }}>
+						<img src="/kubric-logo.png" alt="Kubric" style={{ height: '70px', width: 'auto' }} />
 					</a>
 				</div>
 				
@@ -59,12 +57,12 @@ export function Header() {
 				</div>
 
 				<div className="hidden flex-1 items-center justify-end gap-5 md:flex">
-					<Button variant="ghost" className="font-semibold text-muted-foreground hover:text-foreground hover:bg-transparent">Sign In</Button>
-					<Button className="font-semibold rounded-full bg-primary text-primary-foreground">Get Started →</Button>
+					<a href="/login" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Sign In</a>
+					<a href="/login" className="btn btn-primary" style={{ fontSize: '13px', padding: '8px 18px' }}>Get Started <span className="arrow">→</span></a>
 				</div>
-				<Button size="icon" variant="outline" onClick={() => setOpen(!open)} className="md:hidden">
+				<button onClick={() => setOpen(!open)} className="md:hidden p-2 border border-white/10">
 					<MenuToggleIcon open={open} className="size-5" duration={300} />
-				</Button>
+				</button>
 			</nav>
 		</header>
 	);

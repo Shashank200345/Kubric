@@ -131,44 +131,80 @@
 .landing .btn {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 9px 16px;
-  border-radius: 999px;
-  font-weight: 600;
-  font-size: 14.5px;
+  gap: 10px;
+  padding: 14px 24px;
+  border-radius: 9px;
+  font-weight: 400;
+  font-size: 15px;
   border: 1px solid transparent;
-  transition: transform 0.15s ease, background 0.15s ease,
-    border-color 0.15s ease;
   cursor: pointer;
+  transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease,
+    box-shadow 0.3s ease;
 }
 
-.landing .btn:hover {
-  /* removed transform to stop moving */
+.landing .btn .arrow {
+  display: inline-block;
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.landing .btn:hover .arrow {
+  transform: translateX(5px);
 }
 
 .landing .btn-primary {
-  background: #0f5128;
-  color: #ffffff;
+  background: #7cffb2;
+  color: #051008;
+  border-color: transparent;
+  box-shadow: 0 2px 22px -8px rgba(124, 255, 178, 0.45);
 }
 
 .landing .btn-primary:hover {
-  background: #146c36;
+  background: #ffffff;
+  color: #051008;
+  box-shadow: 0 4px 32px -8px rgba(255, 255, 255, 0.45);
 }
 
 .landing .btn-ghost {
   background: transparent;
   border-color: var(--line-2);
   color: var(--text);
+  box-shadow: none;
 }
 
 .landing .btn-ghost:hover {
   border-color: #fff;
+  color: #fff;
+}
+
+/* plain text action — pods.ml "See how it works" style */
+.landing .btn-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-family: inherit;
+  font-weight: 400;
+  font-size: 15px;
+  cursor: pointer;
+  padding: 14px 10px;
+  transition: color 0.25s ease;
+}
+.landing .btn-text .arrow {
+  display: inline-block;
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.landing .btn-text:hover {
+  color: var(--text);
+}
+.landing .btn-text:hover .arrow {
+  transform: translateX(5px);
 }
 
 .landing .btn.lg {
-  padding: 14px 22px;
-  font-size: 15.5px;
-  border-radius: 14px;
+  padding: 16px 28px;
+  font-size: 16px;
+  border-radius: 10px;
 }
 
 /* ---------- hero ---------- */
@@ -541,7 +577,7 @@
 .landing .pods-title em {
   font-style: italic;
   font-weight: 700;
-  color: var(--dim);
+  color: #7cffb2;
 }
 
 .landing .pods-list {
@@ -742,18 +778,30 @@
   gap: 8px;
   white-space: nowrap;
   border: 1px solid var(--line-2);
-  border-radius: 10px;
-  padding: 11px 18px;
-  font-size: 13.5px;
-  font-weight: 600;
+  border-radius: 12px;
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 400;
   color: var(--text);
   background: transparent;
-  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.3s ease,
+    color 0.3s ease,
+    background 0.3s ease;
 }
 .landing .pod-cta:hover {
   border-color: var(--accent);
-  color: var(--accent);
-  background: rgba(124, 255, 178, 0.06);
+  color: #051008;
+  background: #7cffb2;
+  box-shadow: 0 6px 28px -8px rgba(124, 255, 178, 0.5);
+}
+.landing .pod-cta .arrow {
+  display: inline-block;
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.landing .pod-cta:hover .arrow {
+  transform: translateX(5px);
 }
 
 @media (max-width: 900px) {
@@ -791,6 +839,116 @@
 .landing .wl p {
   margin: 0;
   color: var(--muted);
+}
+
+/* pods.ml-style step cards */
+.landing .steps-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border: 1px solid var(--line);
+}
+.landing .step-card {
+  display: flex;
+  flex-direction: column;
+  padding: 30px 28px;
+  border-right: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.012);
+  transition: background 0.25s ease;
+}
+.landing .step-card:last-child {
+  border-right: none;
+}
+.landing .step-card:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+.landing .step-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+.landing .step-num {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 54px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: rgba(233, 237, 241, 0.12);
+}
+.landing .step-num.accent {
+  color: var(--accent);
+  text-shadow: 0 0 28px rgba(124, 255, 178, 0.5);
+}
+.landing .step-label {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-top: 8px;
+  text-align: right;
+}
+.landing .step-desc {
+  margin: 0 0 26px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.landing .step-meta {
+  margin-top: auto;
+  border-top: 1px solid var(--line);
+}
+.landing .step-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--line);
+}
+.landing .step-row .k {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dim);
+  white-space: nowrap;
+}
+.landing .step-row .v {
+  font-size: 13px;
+  color: var(--text);
+  text-align: right;
+}
+.landing .step-cmd {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 18px;
+  padding: 12px 13px;
+  border: 1px solid var(--line);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.landing .step-cmd .dollar {
+  color: var(--accent);
+}
+
+@media (max-width: 860px) {
+  .landing .steps-grid {
+    grid-template-columns: 1fr;
+  }
+  .landing .step-card {
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+  }
+  .landing .step-card:last-child {
+    border-bottom: none;
+  }
 }
 
 /* split */
@@ -1124,5 +1282,88 @@
   .landing .terminal-body {
     font-size: 12.5px;
     padding: 18px;
+  }
+}
+
+/* ---------- CTA with logo video (dark blend) ---------- */
+.landing .cta-video {
+  background: #000;
+  border-top: 1px solid var(--line);
+  padding: 120px 0;
+  overflow: hidden;
+}
+
+.landing .cta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 50px;
+  align-items: center;
+}
+
+.landing .cta-video-wrap {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
+
+.landing .cta-video-el {
+  width: 100%;
+  max-width: 560px;
+  height: auto;
+  display: block;
+  /* blends the video's near-black background into the black section */
+  mix-blend-mode: screen;
+}
+
+/* feathered black mask over the bottom-right watermark */
+.landing .cta-video-mask {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 32%;
+  height: 34%;
+  pointer-events: none;
+  background: radial-gradient(120% 120% at 100% 100%, #000 55%, rgba(0, 0, 0, 0) 80%);
+}
+
+.landing .cta-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 26px;
+}
+
+.landing .cta-copy h2 {
+  font-size: clamp(32px, 4.5vw, 56px);
+  letter-spacing: -0.02em;
+  font-weight: 700;
+  line-height: 1.05;
+  margin: 0;
+  max-width: 15ch;
+}
+
+.landing .cta-copy h2 em {
+  font-style: italic;
+  color: #7cffb2;
+}
+
+.landing .cta-copy .cta-note {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0;
+}
+
+@media (max-width: 860px) {
+  .landing .cta-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    text-align: center;
+  }
+  .landing .cta-copy {
+    align-items: center;
+  }
+  .landing .cta-copy h2 {
+    max-width: none;
   }
 }

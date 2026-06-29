@@ -2,12 +2,12 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
 import "./landing.css";
 import { Header } from "@/components/ui/header-2";
 import ArchitectureFlow from "@/components/ArchitectureFlow";
 import InteractiveTerminal from "@/components/InteractiveTerminal";
 import EcosystemFlow from "@/components/EcosystemFlow";
+import ResolutionShowcase from "@/components/ResolutionShowcase";
 
 export default function LandingPage() {
   const router = useRouter();
@@ -45,26 +45,23 @@ export default function LandingPage() {
             Plug it into any cluster and stop firefighting at 3 AM.
           </p>
           <div className="hero-cta">
-            <Button
-              size="lg"
-              className="font-semibold bg-primary text-primary-foreground rounded-full px-8 text-[15.5px]"
+            <button
+              className="btn btn-primary lg"
               onClick={(e) => {
                 e.preventDefault();
                 router.push("/login");
               }}
             >
-              Start free →
-            </Button>
-            <Button 
-              size="lg" 
-              variant="outline" 
-              className="font-semibold rounded-full px-8 text-[15.5px] bg-transparent border-white/14 text-white hover:border-white hover:bg-transparent hover:text-white"
+              Start free <span className="arrow">→</span>
+            </button>
+            <button
+              className="btn-text"
               onClick={(e) => {
                 e.preventDefault();
               }}
             >
-              Book a demo
-            </Button>
+              See how it works <span className="arrow">→</span>
+            </button>
           </div>
 
         </div>
@@ -86,7 +83,7 @@ export default function LandingPage() {
       <section className="section dim" id="ecosystem">
         <div className="container">
           <div className="kicker" style={{ textAlign: 'center' }}>Connected</div>
-          <h2 className="section-title" style={{ textAlign: 'center', marginLeft: 'auto', marginRight: 'auto', marginBottom: '18px' }}>Plugs into your entire cluster stack.</h2>
+          <h2 className="section-title" style={{ textAlign: 'center', marginLeft: 'auto', marginRight: 'auto', marginBottom: '18px' }}>Plugs into your <em style={{ fontStyle: 'italic', color: '#7cffb2' }}>entire cluster stack.</em></h2>
           <p className="muted" style={{ textAlign: 'center', maxWidth: '620px', margin: '0 auto 50px', fontSize: '16px' }}>
             One agent, every layer of your platform — orchestration, packaging, and observability, working together.
           </p>
@@ -214,7 +211,7 @@ export default function LandingPage() {
                             href="#"
                             onClick={(e) => e.preventDefault()}
                           >
-                            {row.deploy} →
+                            {row.deploy} <span className="arrow">→</span>
                           </a>
                         </div>
                       </div>
@@ -227,34 +224,92 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* WORKLOADS */}
+      {/* WORKLOADS — pods.ml step-card layout */}
       <section className="section dim" id="solutions">
         <div className="container">
-          <div className="kicker">Workloads</div>
-          <h2 className="section-title">Resolve any failure mode.</h2>
-          <div className="wl-grid">
-            <div className="wl">
-              <h4>CrashLoops &amp; OOMs</h4>
-              <p>
-                Identify the offending deploy, the failing container, and the
-                resource ceiling — with a one‑click patch.
-              </p>
-            </div>
-            <div className="wl">
-              <h4>Networking &amp; DNS</h4>
-              <p>
-                Trace 5xx waterfalls across services, CNI, CoreDNS, and ingress.
-                Kubric explains the hop that broke.
-              </p>
-            </div>
-            <div className="wl">
-              <h4>Scheduling &amp; capacity</h4>
-              <p>
-                Pending pods, noisy neighbors, taints, affinity — Kubric finds
-                the constraint and suggests a placement fix.
-              </p>
-            </div>
+          <div className="pods-head">
+            <span className="pods-head-label"><span className="sq" /> Workloads</span>
+            <span className="pods-head-line" />
+            <span className="pods-head-count">3 modes</span>
           </div>
+          <h2 className="pods-title">
+            Resolve any <em>failure mode.</em>
+          </h2>
+          <div className="steps-grid">
+            {[
+              {
+                idx: "01",
+                label: "Memory & restarts",
+                desc: "Identify the offending deploy, the failing container, and the resource ceiling — with a one-click patch.",
+                meta: [
+                  { k: "Signal", v: "OOMKilled · CrashLoop" },
+                  { k: "Detects", v: "Memory ceiling" },
+                  { k: "Fix", v: "One-click patch" },
+                ],
+                cmd: "$ kubric diagnose --oom",
+              },
+              {
+                idx: "02",
+                label: "Connectivity",
+                desc: "Trace 5xx waterfalls across services, CNI, CoreDNS, and ingress. Kubric explains the exact hop that broke.",
+                meta: [
+                  { k: "Signal", v: "5xx · DNS timeouts" },
+                  { k: "Traces", v: "CNI · CoreDNS · ingress" },
+                  { k: "Fix", v: "Pinpoints the hop" },
+                ],
+                cmd: "$ kubric trace --svc checkout",
+              },
+              {
+                idx: "03",
+                label: "Placement",
+                desc: "Pending pods, noisy neighbors, taints, affinity — Kubric finds the constraint and suggests a placement fix.",
+                meta: [
+                  { k: "Signal", v: "Pending pods" },
+                  { k: "Detects", v: "Taints · affinity · quota" },
+                  { k: "Fix", v: "Placement suggestion" },
+                ],
+                cmd: "$ kubric why-pending",
+                accent: true,
+              },
+            ].map((step) => (
+              <div className="step-card" key={step.idx}>
+                <div className="step-top">
+                  <span className={`step-num ${step.accent ? "accent" : ""}`}>
+                    {step.idx}
+                  </span>
+                  <span className="step-label">{step.label}</span>
+                </div>
+                <p className="step-desc">{step.desc}</p>
+                <div className="step-meta">
+                  {step.meta.map((m) => (
+                    <div className="step-row" key={m.k}>
+                      <span className="k">{m.k}</span>
+                      <span className="v">{m.v}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="step-cmd">
+                  <span className="dollar">$</span>
+                  {step.cmd.replace(/^\$\s*/, "")}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* SHOWCASE — animated incident terminals */}
+      <section className="section" id="showcase">
+        <div className="container">
+          <div className="pods-head">
+            <span className="pods-head-label"><span className="sq" /> In action</span>
+            <span className="pods-head-line" />
+            <span className="pods-head-count">live</span>
+          </div>
+          <h2 className="pods-title">
+            Watch Kubric <em>resolve real incidents.</em>
+          </h2>
+          <ResolutionShowcase />
         </div>
       </section>
 
@@ -262,7 +317,7 @@ export default function LandingPage() {
       <section className="section">
         <div className="container split">
           <div className="split-copy">
-            <h2 className="section-title left">Engineered for incidents.</h2>
+            <h2 className="section-title left">Engineered for <em style={{ fontStyle: 'italic', color: '#7cffb2' }}>incidents.</em></h2>
             <p className="muted">
               From the moment a pod flips red, every layer of Kubric —
               collectors, retrieval, reasoning, action — is tuned for the way
@@ -310,7 +365,7 @@ export default function LandingPage() {
         <div className="container split reverse">
           <div className="split-copy">
             <h2 className="section-title left">
-              Designed for platform teams.
+              Designed for <em style={{ fontStyle: 'italic', color: '#7cffb2' }}>platform teams.</em>
             </h2>
             <p className="muted">
               Whether you operate a single GKE cluster or a fleet of EKS
@@ -413,7 +468,7 @@ export default function LandingPage() {
       <section className="section">
         <div className="container">
           <h2 className="section-title">
-            Helping platform teams sleep at night.
+            Helping platform teams <em style={{ fontStyle: 'italic', color: '#7cffb2' }}>sleep at night.</em>
           </h2>
           <div className="case-grid">
             <a className="case big" href="#">
@@ -454,7 +509,7 @@ export default function LandingPage() {
       {/* EXAMPLES */}
       <section className="section dim">
         <div className="container">
-          <h2 className="section-title">Built with Kubric</h2>
+          <h2 className="section-title">Built with <em style={{ fontStyle: 'italic', color: '#7cffb2' }}>Kubric</em></h2>
           <div className="tabs">
             {tabs.map((tab) => (
               <button
@@ -511,22 +566,35 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="cta">
-        <div className="container cta-inner">
-          <h2>Ship your cluster&apos;s first fix in minutes.</h2>
-          <a
-            className="btn btn-primary lg"
-            href="#"
-            onClick={(e) => {
-              e.preventDefault();
-              router.push("/login");
-            }}
-          >
-            Get started →
-          </a>
-          <div className="cta-note">
-            Free on clusters under 10 nodes. No credit card required.
+      {/* CTA — video left, content right (dark blend) */}
+      <section className="cta-video">
+        <div className="container cta-grid">
+          <div className="cta-video-wrap">
+            <video
+              className="cta-video-el"
+              src="/kubric-logo.mp4"
+              autoPlay
+              loop
+              muted
+              playsInline
+            />
+            <span className="cta-video-mask" />
+          </div>
+          <div className="cta-copy">
+            <h2>Ship your cluster&apos;s first fix <em>in minutes.</em></h2>
+            <a
+              className="btn btn-primary lg"
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                router.push("/login");
+              }}
+            >
+              Get started <span className="arrow">→</span>
+            </a>
+            <div className="cta-note">
+              Free on clusters under 10 nodes. No credit card required.
+            </div>
           </div>
         </div>
       </section>
@@ -536,8 +604,7 @@ export default function LandingPage() {
         <div className="container foot-grid">
           <div>
             <div className="brand">
-              <span className="brand-mark"></span>
-              <span className="brand-name">kubric</span>
+              <img src="/kubric-logo.png" alt="Kubric" style={{ height: '200px', width: 'auto' }} />
             </div>
             <p className="muted small">The autonomous SRE for Kubernetes.</p>
           </div>
