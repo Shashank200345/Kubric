@@ -388,3 +388,257 @@ async def get_metrics_history():
     Each sample: { ts, cpu_pct, memory_pct, pod_count }
     """
     return {"samples": _metrics_history}
+
+
+# ============================================================
+# Additional real-data endpoints: Workloads, Nodes, Events, Ask
+# ============================================================
+
+@app.get("/workloads")
+async def get_workloads(context: Optional[str] = None):
+    """Returns real deployments in the cluster with pod/resource status."""
+    try:
+        deployments_json = KubectlExecutor.run(
+            "kubectl get deployments -A -o json", parse_json=True, context=context
+        )
+        pods_json = KubectlExecutor.run(
+            "kubectl get pods -A -o json", parse_json=True, context=context
+        )
+    except KubectlError as e:
+        logger.error(f"Failed to fetch workloads: {e}")
+        return {"workloads": []}
+
+    # Try to get live cpu/mem per pod (best-effort — needs metrics-server)
+    pod_metrics: dict[str, dict] = {}
+    try:
+        top_output = KubectlExecutor.run("kubectl top pods -A --no-headers", parse_json=False, context=context)
+        for line in top_output.strip().split("\n"):
+            parts = line.split()
+            if len(parts) >= 4:
+                ns, name, cpu, mem = parts[0], parts[1], parts[2], parts[3]
+                pod_metrics[f"{ns}/{name}"] = {
+                    "cpu_m": round(_parse_cpu(cpu) * 1000),
+                    "mem_mi": round(_parse_mem(mem) / (1024 ** 2)),
+                }
+    except Exception:
+        pass  # metrics-server may not be installed
+
+    all_pods = pods_json.get("items", [])
+    workloads = []
+
+    for dep in deployments_json.get("items", []):
+        meta = dep.get("metadata", {})
+        spec = dep.get("spec", {})
+        status = dep.get("status", {})
+        ns = meta.get("namespace", "default")
+        name = meta.get("name", "unknown")
+        desired = spec.get("replicas", 0) or 0
+        ready = status.get("readyReplicas", 0) or 0
+        match_labels = spec.get("selector", {}).get("matchLabels", {}) or {}
+
+        # find pods belonging to this deployment (same namespace + labels superset)
+        owned_pods = []
+        for pod in all_pods:
+            if pod.get("metadata", {}).get("namespace") != ns:
+                continue
+            pod_labels = pod.get("metadata", {}).get("labels", {}) or {}
+            if match_labels and all(pod_labels.get(k) == v for k, v in match_labels.items()):
+                owned_pods.append(pod)
+
+        total_cpu_m = 0
+        total_mem_mi = 0
+        max_restarts = 0
+        for pod in owned_pods:
+            pname = pod.get("metadata", {}).get("name", "")
+            key = f"{ns}/{pname}"
+            if key in pod_metrics:
+                total_cpu_m += pod_metrics[key]["cpu_m"]
+                total_mem_mi += pod_metrics[key]["mem_mi"]
+            for cs in pod.get("status", {}).get("containerStatuses", []):
+                max_restarts = max(max_restarts, cs.get("restartCount", 0))
+
+        if desired == 0:
+            status_label = "Unknown"
+        elif ready >= desired:
+            status_label = "Healthy"
+        elif ready > 0:
+            status_label = "Degraded"
+        else:
+            status_label = "Down"
+
+        if status_label == "Down" or max_restarts >= 5:
+            risk = "high"
+        elif status_label == "Degraded" or max_restarts >= 1:
+            risk = "medium"
+        else:
+            risk = "safe"
+
+        workloads.append({
+            "name": name,
+            "namespace": ns,
+            "pods_ready": ready,
+            "pods_desired": desired,
+            "cpu_m": total_cpu_m,
+            "mem_mi": total_mem_mi,
+            "restarts": max_restarts,
+            "status": status_label,
+            "risk": risk,
+        })
+
+    return {"workloads": workloads}
+
+
+@app.get("/nodes")
+async def get_nodes(context: Optional[str] = None):
+    """Returns real node-level status and resource usage."""
+    try:
+        nodes_json = KubectlExecutor.run("kubectl get nodes -o json", parse_json=True, context=context)
+    except KubectlError as e:
+        logger.error(f"Failed to fetch nodes: {e}")
+        return {"nodes": []}
+
+    top_by_node: dict[str, dict] = {}
+    try:
+        top_output = KubectlExecutor.run("kubectl top nodes --no-headers", parse_json=False, context=context)
+        for line in top_output.strip().split("\n"):
+            parts = line.split()
+            if len(parts) >= 5:
+                try:
+                    top_by_node[parts[0]] = {
+                        "cpu_pct": int(parts[2].replace("%", "")),
+                        "mem_pct": int(parts[4].replace("%", "")),
+                    }
+                except ValueError:
+                    pass
+    except Exception:
+        pass
+
+    nodes = []
+    for node in nodes_json.get("items", []):
+        meta = node.get("metadata", {})
+        name = meta.get("name", "unknown")
+        labels = meta.get("labels", {}) or {}
+        roles = [k.split("/")[-1] for k in labels if k.startswith("node-role.kubernetes.io/")]
+        conditions = node.get("status", {}).get("conditions", [])
+        ready = any(c.get("type") == "Ready" and c.get("status") == "True" for c in conditions)
+        capacity = node.get("status", {}).get("capacity", {})
+        top = top_by_node.get(name, {"cpu_pct": 0, "mem_pct": 0})
+
+        nodes.append({
+            "name": name,
+            "roles": roles or ["worker"],
+            "status": "Ready" if ready else "NotReady",
+            "cpu_pct": top["cpu_pct"],
+            "mem_pct": top["mem_pct"],
+            "cpu_capacity": capacity.get("cpu", "-"),
+            "mem_capacity": capacity.get("memory", "-"),
+            "created_at": meta.get("creationTimestamp"),
+        })
+
+    return {"nodes": nodes}
+
+
+@app.get("/events")
+async def get_events(context: Optional[str] = None, limit: int = 30):
+    """Returns recent real Kubernetes events across all namespaces."""
+    try:
+        events_json = KubectlExecutor.run("kubectl get events -A -o json", parse_json=True, context=context)
+    except KubectlError as e:
+        logger.error(f"Failed to fetch events: {e}")
+        return {"events": []}
+
+    items = events_json.get("items", [])
+
+    def sort_key(ev):
+        return ev.get("lastTimestamp") or ev.get("eventTime") or ev.get("metadata", {}).get("creationTimestamp") or ""
+
+    items.sort(key=sort_key, reverse=True)
+
+    events = []
+    for ev in items[:limit]:
+        involved = ev.get("involvedObject", {})
+        events.append({
+            "type": ev.get("type", "Normal"),
+            "reason": ev.get("reason", ""),
+            "message": ev.get("message", ""),
+            "namespace": ev.get("metadata", {}).get("namespace", ""),
+            "object_kind": involved.get("kind", ""),
+            "object_name": involved.get("name", ""),
+            "last_seen": sort_key(ev),
+            "count": ev.get("count", 1),
+        })
+
+    return {"events": events}
+
+
+class AskRequest(BaseModel):
+    message: str
+    cluster_context: Optional[str] = None
+
+
+@app.post("/ask")
+async def ask_kubric(request: AskRequest):
+    """
+    Lightweight conversational endpoint. Gathers a quick cluster snapshot
+    and asks the LLM to answer the user's question grounded in real state.
+    """
+    from app.ai.llm import OpenRouterClient
+    import json as _json
+
+    snapshot_lines = []
+    try:
+        nodes_json = KubectlExecutor.run("kubectl get nodes -o json", parse_json=True, context=request.cluster_context)
+        snapshot_lines.append(f"Nodes: {len(nodes_json.get('items', []))}")
+    except Exception:
+        snapshot_lines.append("Nodes: unavailable")
+
+    try:
+        pods_json = KubectlExecutor.run(
+            "kubectl get pods -A --field-selector=status.phase=Running -o json",
+            parse_json=True, context=request.cluster_context
+        )
+        snapshot_lines.append(f"Running pods: {len(pods_json.get('items', []))}")
+    except Exception:
+        snapshot_lines.append("Running pods: unavailable")
+
+    try:
+        events_json = KubectlExecutor.run("kubectl get events -A -o json", parse_json=True, context=request.cluster_context)
+        warnings = [e for e in events_json.get("items", []) if e.get("type") == "Warning"]
+        recent_warnings = warnings[-5:]
+        if recent_warnings:
+            snapshot_lines.append("Recent warning events:")
+            for w in recent_warnings:
+                snapshot_lines.append(f"  - {w.get('reason')}: {w.get('message')}")
+        else:
+            snapshot_lines.append("No recent warning events.")
+    except Exception:
+        pass
+
+    snapshot = "\n".join(snapshot_lines)
+
+    llm = OpenRouterClient()
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are Kubric, an AI SRE assistant. Answer the user's question about their "
+                "Kubernetes cluster concisely and factually, grounded in the provided live snapshot. "
+                "If the snapshot lacks the info needed, say so plainly. "
+                'Respond ONLY with JSON: {"reply": "<your answer as plain text>"}'
+            ),
+        },
+        {
+            "role": "user",
+            "content": f"Cluster snapshot:\n{snapshot}\n\nQuestion: {request.message}",
+        },
+    ]
+
+    response_text = await llm.call_llm(messages)
+    if not response_text:
+        return {"reply": "I couldn't reach the AI service. Check that OPENROUTER_API_KEY is configured on the backend."}
+
+    try:
+        parsed = _json.loads(response_text.strip().strip("`").replace("json\n", "", 1))
+        return {"reply": parsed.get("reply", response_text)}
+    except Exception:
+        return {"reply": response_text}
