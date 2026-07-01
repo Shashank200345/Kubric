@@ -1173,25 +1173,54 @@ function KubricStyles() {
       /* ---------- ask kubric chat ---------- */
       .kb-ask-screen { display:flex; flex-direction:column; height:100%; }
       .kb-ask-chat { flex:1; overflow-y:auto; padding:28px 24px; display:flex; flex-direction:column; gap:16px; max-width:680px; margin:0 auto; width:100%; }
-      .kb-ask-empty { margin:auto; text-align:center; }
-      .kb-ask-empty-title { font-size:13px; color:var(--t2); margin-bottom:16px; }
-      .kb-ask-chips { display:grid; grid-template-columns:1fr 1fr; gap:10px; max-width:480px; }
-      .kb-ask-chip { background:var(--s2); border:0.5px solid var(--bd); padding:10px 14px; font-size:12px; color:var(--t2); cursor:pointer; text-align:left; }
-      .kb-ask-chip:hover { border-color:var(--green-bd); color:var(--t1); }
+      .kb-ask-empty { margin:auto; text-align:center; display:flex; flex-direction:column; align-items:center; }
+      .kb-ask-hero { position:relative; margin-bottom:22px; display:flex; align-items:center; justify-content:center; }
+      .kb-ask-logo { height:72px; width:auto; position:relative; z-index:1; animation:kb-float 4s ease-in-out infinite; }
+      @keyframes kb-float { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-8px); } }
+      .kb-ask-hero-glow { position:absolute; width:130px; height:130px; border-radius:50% !important; background:radial-gradient(circle, rgba(124,255,178,0.28), transparent 70%); filter:blur(8px); }
+      .kb-ask-empty-title { font-size:18px; color:var(--t1); font-weight:500; margin:0 0 6px; }
+      .kb-ask-empty-sub { font-size:13px; color:var(--t3); margin:0 0 24px; max-width:380px; line-height:1.5; }
+      .kb-ask-chips { display:grid; grid-template-columns:1fr 1fr; gap:10px; max-width:520px; width:100%; }
+      .kb-ask-chip { display:flex; align-items:center; gap:10px; background:var(--s2); border:0.5px solid var(--bd); padding:12px 14px; font-size:12.5px; color:var(--t2); cursor:pointer; text-align:left; transition:all .15s ease; }
+      .kb-ask-chip:hover { border-color:var(--green-bd); background:var(--green-dim); color:var(--t1); }
+      .kb-ask-chip-icon { color:var(--green); font-size:13px; flex-shrink:0; }
+      .kb-ask-chip span:nth-child(2) { flex:1; }
+      .kb-ask-chip-arrow { color:var(--t3); opacity:0; transition:all .2s ease; }
+      .kb-ask-chip:hover .kb-ask-chip-arrow { opacity:1; color:var(--green); transform:translateX(3px); }
       .kb-chat-row { display:flex; gap:10px; align-items:flex-start; }
       .kb-chat-row.kubric { flex-direction:row-reverse; }
-      .kb-chat-avatar { width:26px; height:26px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-family:var(--font-jetbrains-mono), monospace; font-size:9px; }
+      .kb-chat-avatar { width:28px; height:28px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-family:var(--font-jetbrains-mono), monospace; font-size:9px; overflow:hidden; }
       .kb-chat-avatar.user { background:var(--s3); border:0.5px solid var(--bd2); color:var(--t3); }
-      .kb-chat-avatar.kubric { background:var(--green-dim); border:0.5px solid var(--green-bd); color:var(--green); }
-      .kb-chat-bubble { background:var(--s2); border:0.5px solid var(--bd); padding:10px 14px; font-size:12.5px; color:var(--t1); max-width:480px; line-height:1.6; }
+      .kb-chat-avatar.kubric { background:var(--green-dim); border:0.5px solid var(--green-bd); }
+      .kb-chat-avatar-img { width:20px; height:20px; object-fit:contain; }
+      .kb-chat-bubble { background:var(--s2); border:0.5px solid var(--bd); padding:10px 14px; font-size:12.5px; color:var(--t1); max-width:480px; line-height:1.6; white-space:pre-wrap; word-break:break-word; }
       .kb-chat-bubble.kubric { border-left:2px solid var(--green); color:var(--t2); }
       .kb-chat-tag { display:block; font-family:var(--font-jetbrains-mono), monospace; font-size:10px; color:var(--green); margin-bottom:6px; }
       .kb-typing { display:inline-flex; gap:4px; }
       .kb-typing span { width:5px; height:5px; background:var(--green); animation:kb-pulse 1.2s ease-in-out infinite; }
       .kb-typing span:nth-child(2) { animation-delay:.2s; } .kb-typing span:nth-child(3) { animation-delay:.4s; }
-      .kb-ask-input-wrap { border-top:0.5px solid var(--bd); padding:14px 24px; }
-      .kb-ask-input-inner { max-width:680px; margin:0 auto; display:flex; gap:8px; align-items:flex-end; background:var(--s2); border:0.5px solid var(--bd2); padding:8px 12px; }
-      .kb-ask-textarea { flex:1; background:transparent; border:none; outline:none; color:var(--t1); font-family:inherit; font-size:12.5px; resize:none; max-height:120px; }
+      .kb-stream-cursor { display:inline-block; width:7px; height:14px; margin-left:2px; background:var(--green); vertical-align:text-bottom; animation:kb-blink 1s step-end infinite; }
+      @keyframes kb-blink { 0%,100% { opacity:1; } 50% { opacity:0; } }
+      .kb-ask-input-wrap { border-top:0.5px solid var(--bd); padding:16px 24px 20px; }
+      .kb-ask-input-inner { max-width:680px; margin:0 auto; display:flex; gap:10px; align-items:center; background:var(--s2); border:0.5px solid var(--bd2); padding:10px 10px 10px 16px; transition:border-color .2s ease; }
+      .kb-ask-input-inner:focus-within { border-color:var(--green-bd); }
+      .kb-ask-textarea { flex:1; background:transparent; border:none; outline:none; color:var(--t1); font-family:inherit; font-size:13px; resize:none; max-height:120px; line-height:1.5; padding:3px 0; }
+      .kb-ask-textarea::placeholder { color:var(--t3); }
+      .kb-ask-hint { font-family:var(--font-jetbrains-mono), monospace; font-size:10px; color:var(--t3); white-space:nowrap; flex-shrink:0; }
+      .kb-ask-send { display:inline-flex; align-items:center; gap:7px; background:var(--green-dim); border:0.5px solid var(--green-bd); color:var(--green); font-family:inherit; font-size:12.5px; font-weight:500; padding:9px 16px; cursor:pointer; flex-shrink:0; transition:all .15s ease; }
+      .kb-ask-send:hover:not(:disabled) { background:rgba(124,255,178,0.18); }
+      .kb-ask-send:disabled { opacity:0.4; cursor:not-allowed; }
+      .kb-ask-send-arrow { transition:transform .2s ease; }
+      .kb-ask-send:hover:not(:disabled) .kb-ask-send-arrow { transform:translateX(3px); }
+      .kb-ask-attach { flex-shrink:0; width:32px; height:32px; display:inline-flex; align-items:center; justify-content:center; background:var(--s3); border:0.5px solid var(--bd2); color:var(--t2); font-size:16px; line-height:1; cursor:pointer; transition:all .15s ease; }
+      .kb-ask-attach:hover:not(:disabled) { border-color:var(--green-bd); color:var(--green); background:var(--green-dim); }
+      .kb-ask-attach:disabled { opacity:0.4; cursor:not-allowed; }
+      .kb-ask-preview { max-width:680px; margin:0 auto 10px; }
+      .kb-ask-preview-box { position:relative; display:inline-block; }
+      .kb-ask-preview-img { max-height:120px; max-width:220px; display:block; border:0.5px solid var(--green-bd); object-fit:cover; }
+      .kb-ask-preview-remove { position:absolute; top:-8px; right:-8px; width:20px; height:20px; display:inline-flex; align-items:center; justify-content:center; background:var(--s1); border:0.5px solid var(--bd2); color:var(--t2); font-size:10px; cursor:pointer; transition:all .15s ease; }
+      .kb-ask-preview-remove:hover { border-color:var(--green-bd); color:var(--green); }
+      .kb-chat-image { display:block; max-width:100%; max-height:260px; margin-bottom:8px; border:0.5px solid var(--bd2); object-fit:contain; }
 
       /* ---------- playbooks ---------- */
       .kb-playbook-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:14px; }
