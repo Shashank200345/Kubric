@@ -70,7 +70,7 @@ from app.kubernetes.executor import KubectlExecutor, KubectlError
 from app.ai.agent import KubernetesAIAgent
 from app.insforge_client import InsForgeClient
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Any
 from fastapi import HTTPException, Header
 
 class InvestigationRequest(BaseModel):
@@ -574,13 +574,15 @@ async def get_events(context: Optional[str] = None, limit: int = 30):
 class AskRequest(BaseModel):
     message: str
     cluster_context: Optional[str] = None
+    image: Optional[str] = None  # data URL: "data:image/png;base64,...."
 
 
 @app.post("/ask")
 async def ask_kubric(request: AskRequest):
     """
-    Lightweight conversational endpoint. Gathers a quick cluster snapshot
-    and asks the LLM to answer the user's question grounded in real state.
+    Conversational endpoint. Gathers a quick cluster snapshot and asks the LLM
+    to answer, grounded in real state. Supports an optional image (screenshot,
+    kubectl output, dashboard panel) for multimodal root-cause analysis.
     """
     from app.ai.llm import OpenRouterClient
     import json as _json
@@ -616,26 +618,39 @@ async def ask_kubric(request: AskRequest):
 
     snapshot = "\n".join(snapshot_lines)
 
+    system_prompt = (
+        "You are Kubric, an AI SRE assistant. Answer the user's question about their "
+        "Kubernetes cluster concisely and factually, grounded in the provided live snapshot. "
+        "If an image is attached (screenshot, kubectl output, error, or dashboard), analyse it "
+        "and incorporate what you see. When you spot a problem, name the likely root cause and a "
+        "concrete fix (including a kubectl command when relevant). "
+        "Write in plain prose. Do NOT use markdown formatting of any kind: no '#' headings, "
+        "no '###', no '**bold**', no bullet markers like '-' or '*'. If you need to separate "
+        "sections, use a short label followed by a colon on its own line (e.g. 'Root cause:'). "
+        "Use plain line breaks between ideas. "
+        'Respond ONLY with JSON: {"reply": "<your answer as plain text with line breaks>"}'
+    )
+
+    text_block = f"Cluster snapshot:\n{snapshot}\n\nQuestion: {request.message}"
+
+    # Build user content — multimodal if an image was provided
+    if request.image:
+        user_content: Any = [
+            {"type": "text", "text": text_block},
+            {"type": "image_url", "image_url": {"url": request.image}},
+        ]
+    else:
+        user_content = text_block
+
     llm = OpenRouterClient()
     messages = [
-        {
-            "role": "system",
-            "content": (
-                "You are Kubric, an AI SRE assistant. Answer the user's question about their "
-                "Kubernetes cluster concisely and factually, grounded in the provided live snapshot. "
-                "If the snapshot lacks the info needed, say so plainly. "
-                'Respond ONLY with JSON: {"reply": "<your answer as plain text>"}'
-            ),
-        },
-        {
-            "role": "user",
-            "content": f"Cluster snapshot:\n{snapshot}\n\nQuestion: {request.message}",
-        },
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_content},
     ]
 
     response_text = await llm.call_llm(messages)
     if not response_text:
-        return {"reply": "I couldn't reach the AI service. Check that OPENROUTER_API_KEY is configured on the backend."}
+        return {"reply": "I couldn't reach the AI service. Check that OPENROUTER_API_KEY is configured and the model supports vision if you attached an image."}
 
     try:
         parsed = _json.loads(response_text.strip().strip("`").replace("json\n", "", 1))
