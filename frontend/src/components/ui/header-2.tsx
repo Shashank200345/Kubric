@@ -1,5 +1,6 @@
 'use client';
 import React from 'react';
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { MenuToggleIcon } from '@/components/ui/menu-toggle-icon';
 import { useScroll } from '@/components/ui/use-scroll';
@@ -10,16 +11,20 @@ export function Header() {
 
 	const links = [
 		{
-			label: 'Features',
-			href: '#',
+			label: 'Product',
+			href: '#product',
+		},
+		{
+			label: 'How it works',
+			href: '#how-it-works',
 		},
 		{
 			label: 'Pricing',
-			href: '#',
+			href: '#pricing',
 		},
 		{
-			label: 'About',
-			href: '#',
+			label: 'Integrations',
+			href: '#ecosystem',
 		},
 	];
 
@@ -43,21 +48,47 @@ export function Header() {
 				)}
 			>
 				<div className="flex flex-1 items-center justify-start">
-					<a className="brand" href="/" style={{ textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center' }}>
+					<Link className="brand" href="/" style={{ textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center' }}>
 						<img src="/kubric-logo.png" alt="Kubric" style={{ height: '70px', width: 'auto' }} />
-					</a>
+					</Link>
 				</div>
 				
-				<div className="hidden flex-1 items-center justify-center gap-6 md:flex">
+				<div className="hidden flex-1 items-center justify-center gap-8 md:flex">
 					{links.map((link, i) => (
-						<a key={i} className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground" href={link.href}>
+						<a
+							key={i}
+							href={link.href}
+							style={{
+								fontSize: '13.5px',
+								fontWeight: 500,
+								color: 'rgba(255,255,255,0.65)',
+								textDecoration: 'none',
+								transition: 'color .2s ease',
+								letterSpacing: '-0.01em',
+							}}
+							onMouseEnter={(e) => (e.currentTarget.style.color = '#7cffb2')}
+							onMouseLeave={(e) => (e.currentTarget.style.color = 'rgba(255,255,255,0.65)')}
+						>
 							{link.label}
 						</a>
 					))}
 				</div>
 
 				<div className="hidden flex-1 items-center justify-end gap-5 md:flex">
-					<a href="/login" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Sign In</a>
+					<a
+						href="/login"
+						style={{
+							fontSize: '13.5px',
+							fontWeight: 500,
+							color: 'rgba(255,255,255,0.65)',
+							textDecoration: 'none',
+							transition: 'color .2s ease',
+						}}
+						onMouseEnter={(e) => (e.currentTarget.style.color = '#eef2f5')}
+						onMouseLeave={(e) => (e.currentTarget.style.color = 'rgba(255,255,255,0.65)')}
+					>
+						Sign In
+					</a>
 					<a href="/login" className="btn btn-primary" style={{ fontSize: '13px', padding: '8px 18px' }}>Get Started <span className="arrow">→</span></a>
 				</div>
 				<button onClick={() => setOpen(!open)} className="md:hidden p-2 border border-white/10">
