@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import { useRouter } from "next/navigation";
 import "./landing.css";
 import { Header } from "@/components/ui/header-2";
@@ -8,21 +8,17 @@ import ArchitectureFlow from "@/components/ArchitectureFlow";
 import InteractiveTerminal from "@/components/InteractiveTerminal";
 import EcosystemFlow from "@/components/EcosystemFlow";
 import ResolutionShowcase from "@/components/ResolutionShowcase";
+import ScrollFX from "@/components/ScrollFX";
+import GetStartedFlow from "@/components/GetStartedFlow";
+import ProofBento from "@/components/ProofBento";
+import PricingSection from "@/components/PricingSection";
 
 export default function LandingPage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState("Incident response");
-
-  const tabs = [
-    "Incident response",
-    "Cost optimization",
-    "Upgrade planning",
-    "Policy & compliance",
-    "Capacity forecasting",
-  ];
 
   return (
     <div className="landing">
+      <ScrollFX />
       {/* NAV */}
       <Header />
 
@@ -58,6 +54,7 @@ export default function LandingPage() {
               className="btn-text"
               onClick={(e) => {
                 e.preventDefault();
+                document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" });
               }}
             >
               See how it works <span className="arrow">→</span>
@@ -79,20 +76,8 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ECOSYSTEM — plugs into your stack */}
-      <section className="section dim" id="ecosystem">
-        <div className="container">
-          <div className="kicker" style={{ textAlign: 'center' }}>Connected</div>
-          <h2 className="section-title" style={{ textAlign: 'center', marginLeft: 'auto', marginRight: 'auto', marginBottom: '18px' }}>Plugs into your <em style={{ fontStyle: 'italic', color: '#7cffb2' }}>entire cluster stack.</em></h2>
-          <p className="muted" style={{ textAlign: 'center', maxWidth: '620px', margin: '0 auto 50px', fontSize: '16px' }}>
-            One agent, every layer of your platform — orchestration, packaging, and observability, working together.
-          </p>
-          <EcosystemFlow />
-        </div>
-      </section>
-
       {/* CAPABILITY LIST — pods.ml-style layout */}
-      <section className="section" id="product">
+      <section className="section dim" id="product">
         <div className="container">
           <div className="pods-head">
             <span className="pods-head-label"><span className="sq" /> The platform</span>
@@ -208,8 +193,7 @@ export default function LandingPage() {
                           <p className="pod-detail-note">{row.note}</p>
                           <a
                             className="pod-cta"
-                            href="#"
-                            onClick={(e) => e.preventDefault()}
+                            href="#get-started"
                           >
                             {row.deploy} <span className="arrow">→</span>
                           </a>
@@ -225,7 +209,7 @@ export default function LandingPage() {
       </section>
 
       {/* WORKLOADS — pods.ml step-card layout */}
-      <section className="section dim" id="solutions">
+      <section className="section" id="solutions">
         <div className="container">
           <div className="pods-head">
             <span className="pods-head-label"><span className="sq" /> Workloads</span>
@@ -299,7 +283,7 @@ export default function LandingPage() {
       </section>
 
       {/* SHOWCASE — animated incident terminals */}
-      <section className="section" id="showcase">
+      <section className="section dim" id="showcase">
         <div className="container">
           <div className="pods-head">
             <span className="pods-head-label"><span className="sq" /> In action</span>
@@ -323,8 +307,8 @@ export default function LandingPage() {
               collectors, retrieval, reasoning, action — is tuned for the way
               real incidents actually unfold.
             </p>
-            <a className="link-arrow" href="#">
-              Learn more →
+            <a className="link-arrow" href="#showcase">
+              See it in action →
             </a>
           </div>
           <div className="split-grid">
@@ -361,7 +345,7 @@ export default function LandingPage() {
       </section>
 
       {/* PRODUCT SECTION 2 */}
-      <section className="section">
+      <section className="section dim">
         <div className="container split reverse">
           <div className="split-copy">
             <h2 className="section-title left">
@@ -372,8 +356,8 @@ export default function LandingPage() {
               regions, Kubric slots into your existing stack — Prometheus, Loki,
               Datadog, OpenTelemetry, Argo, Flux — without rip‑and‑replace.
             </p>
-            <a className="link-arrow" href="#">
-              Learn more →
+            <a className="link-arrow" href="#ecosystem">
+              See integrations →
             </a>
           </div>
           <div className="split-grid">
@@ -409,58 +393,30 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* MARQUEE STRIPES */}
-      <section className="stripes" id="infra">
-        <div className="stripe-title">Global cluster intelligence</div>
-        <div className="marquee">
-          <div className="marquee-track">
-            <span>Any cluster, any cloud</span>
-            <span>·</span>
-            <span>EKS · GKE · AKS · OpenShift</span>
-            <span>·</span>
-            <span>Multi‑region by default</span>
-            <span>·</span>
-            <span>Streaming RCA</span>
-            <span>·</span>
-            <span>Read‑only safe</span>
-            <span>·</span>
-            <span>Any cluster, any cloud</span>
-            <span>·</span>
-            <span>EKS · GKE · AKS · OpenShift</span>
-            <span>·</span>
-            <span>Multi‑region by default</span>
-            <span>·</span>
-            <span>Streaming RCA</span>
-            <span>·</span>
-            <span>Read‑only safe</span>
-            <span>·</span>
-          </div>
-        </div>
 
-        <div className="stripe-title">Security &amp; governance</div>
-        <div className="marquee reverse">
-          <div className="marquee-track">
-            <span>SOC 2 Type II</span>
-            <span>·</span>
-            <span>RBAC‑aware</span>
-            <span>·</span>
-            <span>In‑VPC deployment</span>
-            <span>·</span>
-            <span>Audit log everything</span>
-            <span>·</span>
-            <span>Customer‑managed keys</span>
-            <span>·</span>
-            <span>SOC 2 Type II</span>
-            <span>·</span>
-            <span>RBAC‑aware</span>
-            <span>·</span>
-            <span>In‑VPC deployment</span>
-            <span>·</span>
-            <span>Audit log everything</span>
-            <span>·</span>
-            <span>Customer‑managed keys</span>
-            <span>·</span>
-          </div>
+      {/* ECOSYSTEM — plugs into your stack */}
+      <section className="section" id="ecosystem">
+        <div className="container">
+          <div className="kicker" style={{ textAlign: 'center' }}>Connected</div>
+          <h2 className="section-title" style={{ textAlign: 'center', marginLeft: 'auto', marginRight: 'auto', marginBottom: '18px' }}>Plugs into your <em style={{ fontStyle: 'italic', color: '#7cffb2' }}>entire cluster stack.</em></h2>
+          <p className="muted" style={{ textAlign: 'center', maxWidth: '620px', margin: '0 auto 50px', fontSize: '16px' }}>
+            One agent, every layer of your platform — orchestration, packaging, and observability, working together.
+          </p>
+          <EcosystemFlow />
+        </div>
+      </section>
+
+      {/* PRICING */}
+      <section className="section dim" id="pricing">
+        <div className="container">
+          <div className="kicker" style={{ textAlign: 'center' }}>Pricing</div>
+          <h2 className="section-title" style={{ textAlign: 'center', marginLeft: 'auto', marginRight: 'auto', marginBottom: '10px' }}>
+            Priced like <em style={{ fontStyle: 'italic', color: '#7cffb2' }}>infrastructure.</em> Not a SaaS seat.
+          </h2>
+          <p className="muted" style={{ textAlign: 'center', maxWidth: '600px', margin: '0 auto 44px', fontSize: '16px' }}>
+            A predictable platform fee that scales with cluster size, plus outcome credits that fire only on real work delivered. Free forever for clusters under 10 nodes.
+          </p>
+          <PricingSection />
         </div>
       </section>
 
@@ -470,99 +426,21 @@ export default function LandingPage() {
           <h2 className="section-title">
             Helping platform teams <em style={{ fontStyle: 'italic', color: '#7cffb2' }}>sleep at night.</em>
           </h2>
-          <div className="case-grid">
-            <a className="case big" href="#">
-              <div className="case-logo">▲ Northwind</div>
-              <div className="case-stat">73%</div>
-              <div className="case-label">
-                drop in MTTR for production incidents
-              </div>
-            </a>
-            <a className="case" href="#">
-              <div className="case-logo">Helios</div>
-              <p>
-                Cut on‑call paging volume in half across 14 EKS clusters.
-              </p>
-            </a>
-            <a className="case" href="#">
-              <div className="case-logo">Forge.io</div>
-              <p>
-                &ldquo;Kubric resolves the boring 80% before a human even
-                looks.&rdquo;
-              </p>
-            </a>
-            <a className="case" href="#">
-              <div className="case-logo">Quanta</div>
-              <div className="case-stat sm">9 min → 42 sec</div>
-              <div className="case-label">
-                average time‑to‑root‑cause
-              </div>
-            </a>
-            <a className="case" href="#">
-              <div className="case-logo">Lumen</div>
-              <p>Replaced a 400‑page runbook with a single agent.</p>
-            </a>
-          </div>
+          <ProofBento />
         </div>
       </section>
 
-      {/* EXAMPLES */}
-      <section className="section dim">
+      {/* GET STARTED — animated hub */}
+      <section className="section dim" id="get-started">
         <div className="container">
-          <h2 className="section-title">Built with <em style={{ fontStyle: 'italic', color: '#7cffb2' }}>Kubric</em></h2>
-          <div className="tabs">
-            {tabs.map((tab) => (
-              <button
-                key={tab}
-                className={`tab ${activeTab === tab ? "active" : ""}`}
-                onClick={() => setActiveTab(tab)}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
-          <div className="ex-grid">
-            <a className="ex" href="#">
-              <h5>Auto‑diagnose 5xx spikes</h5>
-              <p>
-                Correlate ingress, service mesh, and pod errors into one
-                timeline.
-              </p>
-            </a>
-            <a className="ex" href="#">
-              <h5>Resolve CrashLoopBackOff</h5>
-              <p>
-                From event noise to root cause and a ready‑to‑merge patch PR.
-              </p>
-            </a>
-            <a className="ex" href="#">
-              <h5>Find the noisy neighbor</h5>
-              <p>
-                Spot the workload starving everyone else on the node —
-                automatically.
-              </p>
-            </a>
-            <a className="ex" href="#">
-              <h5>Tame OOMKills</h5>
-              <p>
-                Right‑size memory limits with evidence from real traffic.
-              </p>
-            </a>
-            <a className="ex" href="#">
-              <h5>Debug DNS storms</h5>
-              <p>
-                Trace CoreDNS latency back to the chatty client that triggered
-                it.
-              </p>
-            </a>
-            <a className="ex" href="#">
-              <h5>Upgrade readiness</h5>
-              <p>
-                Surface deprecated APIs and breaking changes before you cut
-                over.
-              </p>
-            </a>
-          </div>
+          <div className="kicker" style={{ textAlign: 'center' }}>Onboarding</div>
+          <h2 className="section-title" style={{ textAlign: 'center', marginLeft: 'auto', marginRight: 'auto', marginBottom: '10px' }}>
+            Get started in <em style={{ fontStyle: 'italic', color: '#7cffb2' }}>minutes.</em>
+          </h2>
+          <p className="muted" style={{ textAlign: 'center', maxWidth: '560px', margin: '0 auto 40px', fontSize: '16px' }}>
+            Connect your cluster, let Kubric investigate, and ship the fix — no rip‑and‑replace, no 3 AM stand‑ups.
+          </p>
+          <GetStartedFlow />
         </div>
       </section>
 
@@ -582,16 +460,12 @@ export default function LandingPage() {
           </div>
           <div className="cta-copy">
             <h2>Ship your cluster&apos;s first fix <em>in minutes.</em></h2>
-            <a
+            <button
               className="btn btn-primary lg"
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                router.push("/login");
-              }}
+              onClick={() => router.push("/login")}
             >
               Get started <span className="arrow">→</span>
-            </a>
+            </button>
             <div className="cta-note">
               Free on clusters under 10 nodes. No credit card required.
             </div>
@@ -604,16 +478,16 @@ export default function LandingPage() {
         <div className="container foot-grid">
           <div>
             <div className="brand">
-              <img src="/kubric-logo.png" alt="Kubric" style={{ height: '200px', width: 'auto' }} />
+              <img src="/kubric-logo.png" alt="Kubric" style={{ height: '56px', width: 'auto' }} />
             </div>
             <p className="muted small">The autonomous SRE for Kubernetes.</p>
           </div>
           <div>
             <h6>Product</h6>
-            <a href="#">Agent</a>
-            <a href="#">Integrations</a>
-            <a href="#">Pricing</a>
-            <a href="#">Changelog</a>
+            <a href="#product">Agent</a>
+            <a href="#ecosystem">Integrations</a>
+            <a href="#pricing">Pricing</a>
+            <a href="#how-it-works">How it works</a>
           </div>
           <div>
             <h6>Resources</h6>
