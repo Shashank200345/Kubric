@@ -120,7 +120,7 @@ export default function ArchitectureFlow() {
           grid-template-columns: 0.82fr 1.18fr;
           gap: 72px;
           align-items: center;
-          font-family: var(--font-thicccboi), system-ui, sans-serif;
+          font-family: var(--font-inter), system-ui, sans-serif;
         }
 
         /* ── left: workflow explanation ── */
@@ -149,14 +149,14 @@ export default function ArchitectureFlow() {
         }
         .af-step-active {
           opacity: 1;
-          background: linear-gradient(120deg, rgba(124,255,178,0.07), rgba(155,140,255,0.05));
+          background: rgba(124,255,178,0.06);
           border-color: rgba(124,255,178,0.28);
           box-shadow: 0 0 38px -14px rgba(124,255,178,0.5), inset 0 0 0 1px rgba(124,255,178,0.06);
         }
         .af-step-done { opacity: 0.78; }
         .af-step-num {
           display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0;
-          font-family: "JetBrains Mono", monospace; font-size: 15px; font-weight: 600;
+          font-family: var(--font-jetbrains-mono), monospace; font-size: 15px; font-weight: 600;
           letter-spacing: 0.02em;
           color: #5f6770; background: none; border: none; box-shadow: none;
           transition: color .45s ease;
@@ -183,7 +183,7 @@ export default function ArchitectureFlow() {
           display: flex; flex-direction: column; gap: 6px;
           background:
             radial-gradient(120% 90% at 12% 0%, rgba(124,255,178,0.08), transparent 55%),
-            radial-gradient(120% 90% at 90% 0%, rgba(155,140,255,0.08), transparent 55%),
+            radial-gradient(120% 90% at 90% 0%, rgba(124,255,178,0.05), transparent 55%),
             linear-gradient(160deg, rgba(255,255,255,0.04), rgba(8,18,11,0.6));
           border: 1px solid rgba(255,255,255,0.08);
           backdrop-filter: blur(22px) saturate(150%);
@@ -211,13 +211,13 @@ export default function ArchitectureFlow() {
           backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
           transition: border-color .5s ease, box-shadow .5s ease, transform .5s ease, background .5s ease;
         }
-        .af-pod-bad { border-color: rgba(255,107,138,0.28); background: rgba(255,107,138,0.06); }
+        .af-pod-bad { border-color: rgba(255,107,107,0.28); background: rgba(255,107,107,0.06); }
         .af-pod-fire {
           border-color: rgba(124,255,178,0.55) !important;
           box-shadow: 0 0 0 1px rgba(124,255,178,0.4), 0 0 22px -4px rgba(124,255,178,0.45);
           transform: translateY(-2px);
         }
-        .af-pod-name { font-size: 9px; font-weight: 600; font-family: "JetBrains Mono", monospace; color: #e9edf1; margin: 0; overflow: hidden; text-overflow: ellipsis; }
+        .af-pod-name { font-size: 9px; font-weight: 600; font-family: var(--font-jetbrains-mono), monospace; color: #e9edf1; margin: 0; overflow: hidden; text-overflow: ellipsis; }
         .af-pod-ns { font-size: 8px; color: #6b727b; margin: 1px 0 0; }
         .af-pill {
           display: inline-flex; align-items: center; gap: 3px; font-size: 7.5px; font-weight: 600;
@@ -225,10 +225,8 @@ export default function ArchitectureFlow() {
           white-space: nowrap; max-width: 100%; overflow: hidden;
         }
         .af-pill .pdot { width: 4px; height: 4px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
-        .af-pill-err  { color: #ff6b8a; background: rgba(255,107,138,0.12); border-color: rgba(255,107,138,0.25); }
-        .af-pill-warn { color: #ffb86b; background: rgba(255,184,107,0.12); border-color: rgba(255,184,107,0.25); }
+        .af-pill-err  { color: #ff6b6b; background: rgba(255,107,107,0.12); border-color: rgba(255,107,107,0.25); }
         .af-pill-ok   { color: #7cffb2; background: rgba(124,255,178,0.12); border-color: rgba(124,255,178,0.25); }
-        .af-pill-oom  { color: #c9b6ff; background: rgba(155,140,255,0.14); border-color: rgba(155,140,255,0.28); }
 
         .af-insp { display: flex; flex-direction: column; }
         .af-insp-on { border-color: rgba(124,255,178,0.3); box-shadow: 0 0 20px -8px rgba(124,255,178,0.35); }
@@ -247,13 +245,13 @@ export default function ArchitectureFlow() {
           background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
           backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
         }
-        .af-brain { border-color: rgba(155,140,255,0.25); box-shadow: 0 0 34px -16px rgba(155,140,255,0.4); }
+        .af-brain { border-color: rgba(124,255,178,0.25); box-shadow: 0 0 34px -16px rgba(124,255,178,0.4); }
         .af-brain-grid { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
         .af-brain-head { display: flex; align-items: center; gap: 5px; margin-bottom: 8px; flex-wrap: wrap; }
         .af-brain-title { font-size: 10px; font-weight: 600; color: #e9edf1; margin: 0; }
         .af-status { font-size: 7.5px; padding: 2px 7px; border-radius: 999px; font-weight: 600; border: 1px solid transparent; }
-        .af-status-wait { color: #9b8cff; background: rgba(155,140,255,0.12); border-color: rgba(155,140,255,0.28); }
-        .af-status-run  { color: #ffb86b; background: rgba(255,184,107,0.12); border-color: rgba(255,184,107,0.28); }
+        .af-status-wait { color: #9aa3ad; background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.14); }
+        .af-status-run  { color: #7cffb2; background: rgba(124,255,178,0.12); border-color: rgba(124,255,178,0.28); }
         .af-status-done { color: #7cffb2; background: rgba(124,255,178,0.12); border-color: rgba(124,255,178,0.28); }
         .af-reason { display: flex; flex-direction: column; gap: 4px; }
         .af-reason-line { display: flex; align-items: flex-start; gap: 5px; font-size: 8.5px; color: #9aa3ad; line-height: 1.35; }
@@ -265,10 +263,10 @@ export default function ArchitectureFlow() {
         .af-out-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
         .af-out { border-radius: 10px; padding: 10px; border: 1px solid rgba(255,255,255,0.08); }
         .af-out-fix { background: rgba(124,255,178,0.05); border-color: rgba(124,255,178,0.22); }
-        .af-out-diag { background: rgba(127,211,255,0.05); border-color: rgba(127,211,255,0.22); }
+        .af-out-diag { background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.1); }
         .af-out-head { display: flex; align-items: center; gap: 5px; font-size: 9px; font-weight: 600; margin: 0 0 6px; }
-        .af-code { margin: 0; font-family: "JetBrains Mono", monospace; font-size: 8px; line-height: 1.5; white-space: pre-wrap; color: #aef7d0; transition: opacity .7s ease; }
-        .af-diag-body { font-size: 8.5px; line-height: 1.45; color: #bfe6ff; transition: opacity .7s ease; }
+        .af-code { margin: 0; font-family: var(--font-jetbrains-mono), monospace; font-size: 8px; line-height: 1.5; white-space: pre-wrap; color: #aef7d0; transition: opacity .7s ease; }
+        .af-diag-body { font-size: 8.5px; line-height: 1.45; color: rgba(255,255,255,0.66); transition: opacity .7s ease; }
 
         .af-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
         .af-live { font-size: 8.5px; color: #6b727b; display: inline-flex; align-items: center; gap: 5px; }
@@ -346,7 +344,7 @@ export default function ArchitectureFlow() {
               <div key={i} className={`af-card ${pod.type !== 'ok' ? 'af-pod-bad' : ''} ${firingPods.has(i) ? 'af-pod-fire' : ''}`}>
                 <p className="af-pod-name">{pod.name}</p>
                 <p className="af-pod-ns">ns: {pod.ns}</p>
-                <span className={`af-pill ${pod.type === 'crash' ? 'af-pill-err' : ''}${pod.type === 'pull' ? 'af-pill-warn' : ''}${pod.type === 'ok' ? 'af-pill-ok' : ''}${pod.type === 'oom' ? 'af-pill-oom' : ''}`}>
+                <span className={`af-pill ${pod.type === 'ok' ? 'af-pill-ok' : 'af-pill-err'}`}>
                   <span className={`pdot ${pod.type !== 'ok' ? 'af-blink' : ''}`} />
                   {pod.status}
                 </span>
@@ -363,10 +361,10 @@ export default function ArchitectureFlow() {
             </marker>
           </defs>
           {[
-            { id: 'b1a', d: 'M80,2 L80,24',   color: '#ff6b8a', delay: '0s'   },
-            { id: 'b1b', d: 'M240,2 L240,24', color: '#ffb86b', delay: '0.18s' },
-            { id: 'b1c', d: 'M400,2 L400,24', color: '#9aa3ad', delay: '0.36s' },
-            { id: 'b1d', d: 'M560,2 L560,24', color: '#9b8cff', delay: '0.27s' },
+            { id: 'b1a', d: 'M80,2 L80,24',   color: '#7cffb2', delay: '0s'   },
+            { id: 'b1b', d: 'M240,2 L240,24', color: '#7cffb2', delay: '0.18s' },
+            { id: 'b1c', d: 'M400,2 L400,24', color: '#7cffb2', delay: '0.36s' },
+            { id: 'b1d', d: 'M560,2 L560,24', color: '#7cffb2', delay: '0.27s' },
           ].map(b => (
             <g key={b.id} className="af-beam-grp" style={{ opacity: activeBeams.has(b.id) ? 1 : 0 }}>
               <path className="af-arrow-base" d={b.d} stroke={b.color} />
@@ -380,9 +378,9 @@ export default function ArchitectureFlow() {
           <p className="af-label">Kubric inspectors</p>
           <div className="af-grid4">
             {[
-              { icon: 'ti-circles-relation', name: 'Pod', detail: 'describe + get', glow: 'rgba(255,107,138,0.16)', iconColor: '#ff6b8a', fill: 'linear-gradient(90deg,#ff6b8a,#ff9bb0)' },
-              { icon: 'ti-terminal',         name: 'Logs', detail: 'current + prev', glow: 'rgba(255,184,107,0.16)', iconColor: '#ffb86b', fill: 'linear-gradient(90deg,#ffb86b,#ffd9a8)' },
-              { icon: 'ti-topology-star',    name: 'Events', detail: 'warnings', glow: 'rgba(155,140,255,0.16)', iconColor: '#9b8cff', fill: 'linear-gradient(90deg,#9b8cff,#c9b6ff)' },
+              { icon: 'ti-circles-relation', name: 'Pod', detail: 'describe + get', glow: 'rgba(124,255,178,0.16)', iconColor: '#7cffb2', fill: 'linear-gradient(90deg,#7cffb2,#b6ffd8)' },
+              { icon: 'ti-terminal',         name: 'Logs', detail: 'current + prev', glow: 'rgba(124,255,178,0.16)', iconColor: '#7cffb2', fill: 'linear-gradient(90deg,#7cffb2,#b6ffd8)' },
+              { icon: 'ti-topology-star',    name: 'Events', detail: 'warnings', glow: 'rgba(124,255,178,0.16)', iconColor: '#7cffb2', fill: 'linear-gradient(90deg,#7cffb2,#b6ffd8)' },
               { icon: 'ti-network',          name: 'Network', detail: 'DNS + endpoints', glow: 'rgba(124,255,178,0.16)', iconColor: '#7cffb2', fill: 'linear-gradient(90deg,#7cffb2,#b6ffd8)' },
             ].map((insp, i) => (
               <div key={i} className={`af-card af-insp ${activeInspectors.has(i) ? 'af-insp-on' : ''}`}>
@@ -404,9 +402,9 @@ export default function ArchitectureFlow() {
         {/* Beam SVG 2 — directed dotted arrows converging */}
         <svg viewBox="0 0 640 38" className="af-svg af-layer" height={38} preserveAspectRatio="none">
           {[
-            { id: 'b2a', d: 'M80,2 Q80,22 320,36',  color: '#ff6b8a', delay: '0s'   },
-            { id: 'b2b', d: 'M240,2 Q240,22 320,36', color: '#ffb86b', delay: '0.18s' },
-            { id: 'b2c', d: 'M400,2 Q400,22 320,36', color: '#9b8cff', delay: '0.36s' },
+            { id: 'b2a', d: 'M80,2 Q80,22 320,36',  color: '#7cffb2', delay: '0s'   },
+            { id: 'b2b', d: 'M240,2 Q240,22 320,36', color: '#7cffb2', delay: '0.18s' },
+            { id: 'b2c', d: 'M400,2 Q400,22 320,36', color: '#7cffb2', delay: '0.36s' },
             { id: 'b2d', d: 'M560,2 Q560,22 320,36', color: '#7cffb2', delay: '0.27s' },
           ].map(b => (
             <g key={b.id} className="af-beam-grp" style={{ opacity: activeBeams.has(b.id) ? 1 : 0 }}>
@@ -425,7 +423,7 @@ export default function ArchitectureFlow() {
           <div className="af-panel af-brain af-brain-grid">
             <div>
               <div className="af-brain-head">
-                <i className="ti ti-brain" style={{ color: '#9b8cff', fontSize: 12 }} aria-hidden="true" />
+                <i className="ti ti-brain" style={{ color: '#7cffb2', fontSize: 12 }} aria-hidden="true" />
                 <p className="af-brain-title">Kubric reasoning engine</p>
                 <span className={`af-status ${brainStatus === 'waiting' ? 'af-status-wait' : ''}${brainStatus === 'reasoning' ? 'af-status-run' : ''}${brainStatus === 'done' ? 'af-status-done' : ''}`}>
                   {brainStatus === 'waiting' ? 'Waiting' : brainStatus === 'reasoning' ? 'Reasoning...' : 'Done'}
@@ -439,7 +437,7 @@ export default function ArchitectureFlow() {
                   'Root cause found — 2 fixes ready',
                 ].map((line, i) => (
                   <div key={i} className={`af-reason-line ${activeReasoningLines.has(i) ? 'af-fade-in' : ''}`} style={{ opacity: activeReasoningLines.has(i) ? undefined : 0 }}>
-                    <span className="rdot" style={{ background: i === 3 ? '#7cffb2' : '#9b8cff', boxShadow: i === 3 ? '0 0 8px #7cffb2' : 'none' }} />
+                    <span className="rdot" style={{ background: i === 3 ? '#7cffb2' : 'rgba(124,255,178,0.5)', boxShadow: i === 3 ? '0 0 8px #7cffb2' : 'none' }} />
                     {line}
                   </div>
                 ))}
@@ -448,9 +446,9 @@ export default function ArchitectureFlow() {
             <div className="af-evidence">
               <p className="af-evidence-label">Evidence</p>
               {[
-                { icon: 'ti-circles-relation', label: '4 pods',   color: '#ff6b8a', bg: 'rgba(255,107,138,0.1)', bd: 'rgba(255,107,138,0.25)' },
-                { icon: 'ti-terminal',         label: '312 logs',  color: '#ffb86b', bg: 'rgba(255,184,107,0.1)', bd: 'rgba(255,184,107,0.25)' },
-                { icon: 'ti-topology-star',    label: '18 events', color: '#9b8cff', bg: 'rgba(155,140,255,0.1)', bd: 'rgba(155,140,255,0.25)' },
+                { icon: 'ti-circles-relation', label: '4 pods',   color: '#7cffb2', bg: 'rgba(124,255,178,0.1)', bd: 'rgba(124,255,178,0.25)' },
+                { icon: 'ti-terminal',         label: '312 logs',  color: '#7cffb2', bg: 'rgba(124,255,178,0.1)', bd: 'rgba(124,255,178,0.25)' },
+                { icon: 'ti-topology-star',    label: '18 events', color: '#7cffb2', bg: 'rgba(124,255,178,0.1)', bd: 'rgba(124,255,178,0.25)' },
                 { icon: 'ti-network',          label: '6 routes',  color: '#7cffb2', bg: 'rgba(124,255,178,0.1)', bd: 'rgba(124,255,178,0.25)' },
               ].map((pill, i) => (
                 <span key={i} className="af-ev" style={{ color: pill.color, background: pill.bg, borderColor: pill.bd }}>
@@ -491,7 +489,7 @@ kubectl delete pod \\
   order-api-6bc8`}</pre>
             </div>
             <div className="af-out af-out-diag">
-              <p className="af-out-head" style={{ color: '#7fd3ff' }}>
+              <p className="af-out-head" style={{ color: '#7cffb2' }}>
                 <i className="ti ti-file-description" style={{ fontSize: 11 }} aria-hidden="true" /> Diagnosis
               </p>
               <div className="af-diag-body" style={{ opacity: diagVisible ? 1 : 0 }}>
