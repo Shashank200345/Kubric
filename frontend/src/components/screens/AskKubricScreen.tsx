@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { API_BASE } from '@/lib/api';
 
 interface ChatMsg {
   role: 'user' | 'kubric';
@@ -120,7 +121,7 @@ export default function AskKubricScreen({ selectedCluster, initials }: { selecte
     setImage(null);
     setSending(true);
     try {
-      const res = await fetch('http://localhost:8000/ask', {
+      const res = await fetch(`${API_BASE}/ask`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -139,7 +140,7 @@ export default function AskKubricScreen({ selectedCluster, initials }: { selecte
       }
     } catch {
       setSending(false);
-      streamInReply('Could not reach the backend at localhost:8000.');
+      streamInReply('Could not reach the Kubric backend. Is it running?');
     }
   };
 

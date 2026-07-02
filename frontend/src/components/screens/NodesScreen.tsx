@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { API_BASE } from '@/lib/api';
 
 interface Node {
   name: string;
@@ -21,7 +22,7 @@ export default function NodesScreen() {
     let active = true;
     const poll = async () => {
       try {
-        const res = await fetch('http://localhost:8000/nodes');
+        const res = await fetch(`${API_BASE}/nodes`);
         if (res.ok && active) {
           const data = await res.json();
           setNodes(data.nodes || []);

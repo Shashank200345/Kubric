@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { insforge } from '@/lib/insforge';
+import { API_BASE } from '@/lib/api';
 import CommandPalette from '@/components/CommandPalette';
 import IncidentsScreen from '@/components/screens/IncidentsScreen';
 import PRRiskScreen from '@/components/screens/PRRiskScreen';
@@ -32,9 +33,13 @@ interface Investigation {
   created_at: string;
 }
 
+type SessionUser = { id: string; email?: string; [key: string]: unknown };
+type RealtimeMessage = Partial<ProgressStep & Investigation> & { meta?: { channel?: string } };
+type MetricSample = { ts: string; cpu_pct: number; memory_pct: number; pod_count: number };
+
 export default function Dashboard() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<SessionUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
   const [investigations, setInvestigations] = useState<Investigation[]>([]);
@@ -52,6 +57,33 @@ export default function Dashboard() {
   const [liveMetrics, setLiveMetrics] = useState({ cpu_pct: 0, memory_pct: 0, disk_pct: 0, network_pct: 0, node_count: 0, pod_count: 0 });
 
   const channelRef = useRef<string | null>(null);
+
+  const fetchClusters = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/clusters`);
+      if (res.ok) {
+        const data = await res.json();
+        setClusters(data.clusters || []);
+        if (data.clusters && data.clusters.length > 0) {
+          setSelectedCluster(data.clusters[0]);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to fetch clusters", e);
+    }
+  };
+
+  const fetchHistory = async () => {
+    const { data, error } = await insforge.database
+      .from('investigations')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (!error && data) {
+      setInvestigations(data as Investigation[]);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -82,7 +114,7 @@ export default function Dashboard() {
       // back off if endpoint keeps failing (backend not ready / endpoint missing)
       if (consecutiveFailures >= 3) return;
       try {
-        const res = await fetch('http://localhost:8000/metrics');
+        const res = await fetch(`${API_BASE}/metrics`);
         if (!res.ok) {
           consecutiveFailures++;
           return;
@@ -110,33 +142,6 @@ export default function Dashboard() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, []);
-
-  const fetchClusters = async () => {
-    try {
-      const res = await fetch('http://localhost:8000/clusters');
-      if (res.ok) {
-        const data = await res.json();
-        setClusters(data.clusters || []);
-        if (data.clusters && data.clusters.length > 0) {
-          setSelectedCluster(data.clusters[0]);
-        }
-      }
-    } catch (e) {
-      console.error("Failed to fetch clusters", e);
-    }
-  };
-
-  const fetchHistory = async () => {
-    const { data, error } = await insforge.database
-      .from('investigations')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(10);
-
-    if (!error && data) {
-      setInvestigations(data as Investigation[]);
-    }
-  };
 
   const handleInvestigate = async () => {
     if (isInvestigating || !user) return;
@@ -166,7 +171,7 @@ export default function Dashboard() {
         console.error("Realtime subscribe failed:", response.error?.message);
       }
 
-      insforge.realtime.on('progress_updated', (message: any) => {
+      insforge.realtime.on('progress_updated', (message: RealtimeMessage) => {
         if (message.meta?.channel !== channel) return;
 
         if (message.step) {
@@ -198,7 +203,7 @@ export default function Dashboard() {
       // Fallback polling for progress in case realtime is blocked or RLS prevents frontend reads
       const pollInterval = setInterval(async () => {
         try {
-          const res = await fetch(`http://localhost:8000/investigate/${inv.id}/progress`);
+          const res = await fetch(`${API_BASE}/investigate/${inv.id}/progress`);
           if (res.ok) {
             const data = await res.json();
             if (data.progress && data.progress.length > 0) {
@@ -211,7 +216,7 @@ export default function Dashboard() {
       }, 1000);
 
       try {
-        const res = await fetch('http://localhost:8000/investigate', {
+        const res = await fetch(`${API_BASE}/investigate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
@@ -238,18 +243,18 @@ export default function Dashboard() {
           setCurrentInvestigation(finalInv as Investigation);
         }
 
-      } catch (fetchErr: any) {
+      } catch (fetchErr) {
         clearTimeout(timeout);
         clearInterval(pollInterval);
-        if (fetchErr.name === 'AbortError') {
+        if (fetchErr instanceof DOMException && fetchErr.name === 'AbortError') {
           setError('Investigation timed out after 2 minutes.');
         } else {
-          setError(fetchErr.message || 'Failed to reach backend.');
+          setError(fetchErr instanceof Error ? fetchErr.message : 'Failed to reach backend.');
         }
       }
 
-    } catch (err: any) {
-      setError(err.message || 'An unexpected error occurred.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred.');
     } finally {
       setIsInvestigating(false);
       if (channelRef.current) {
@@ -270,7 +275,7 @@ export default function Dashboard() {
     setCurrentInvestigation(inv);
     setProgressSteps([]);
     try {
-      const res = await fetch(`http://localhost:8000/investigate/${inv.id}/progress`);
+      const res = await fetch(`${API_BASE}/investigate/${inv.id}/progress`);
       if (res.ok) {
         const data = await res.json();
         if (data.progress) setProgressSteps(data.progress as ProgressStep[]);
@@ -680,7 +685,7 @@ function ActivityChart() {
     { name: 'Avg latency', unit: 'ms', color: 'rgba(255,255,255,0.28)', key: 'pod_count' as const },
   ];
 
-  const [samples, setSamples] = useState<any[]>([]);
+  const [samples, setSamples] = useState<MetricSample[]>([]);
   const [hover, setHover] = useState<{ x: number; idx: number } | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
@@ -689,7 +694,7 @@ function ActivityChart() {
     let active = true;
     const poll = async () => {
       try {
-        const res = await fetch('http://localhost:8000/metrics/history');
+        const res = await fetch(`${API_BASE}/metrics/history`);
         if (res.ok && active) {
           const data = await res.json();
           if (data.samples) setSamples(data.samples);
@@ -709,7 +714,7 @@ function ActivityChart() {
     // pre-generate stable random offsets so lines zigzag consistently per render
     return Array.from({ length: 100 }, () => (Math.random() - 0.5) * 2);
   });
-  const getVals = (key: string, metricIdx: number) => samples.map((s, i) => {
+  const getVals = (key: 'cpu_pct' | 'memory_pct' | 'pod_count', metricIdx: number) => samples.map((s, i) => {
     const raw = s[key] ?? 0;
     // add zigzag noise proportional to the value (±15% variation)
     const noise = jitter[(i * 3 + metricIdx * 7) % jitter.length] * Math.max(raw * 0.15, 3);
@@ -874,7 +879,7 @@ function KubricStyles() {
         --crit:#ff6b6b; --crit-dim:rgba(255,107,107,0.10); --crit-bd:rgba(255,107,107,0.28);
         --t1:rgba(255,255,255,0.92); --t2:rgba(255,255,255,0.50); --t3:rgba(255,255,255,0.30);
         background:var(--bg); color:var(--t1);
-        font-family:var(--font-thicccboi), system-ui, sans-serif;
+        font-family:var(--font-inter), system-ui, -apple-system, sans-serif;
       }
       .kb .custom-scrollbar::-webkit-scrollbar, .kb-scroll::-webkit-scrollbar { width:7px; height:7px; }
       .kb .custom-scrollbar::-webkit-scrollbar-thumb, .kb-scroll::-webkit-scrollbar-thumb { background:var(--s3); }

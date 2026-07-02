@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { API_BASE } from '@/lib/api';
 
 interface Workload {
   name: string;
@@ -24,7 +25,7 @@ export default function WorkloadsScreen() {
     let active = true;
     const poll = async () => {
       try {
-        const res = await fetch('http://localhost:8000/workloads');
+        const res = await fetch(`${API_BASE}/workloads`);
         if (res.ok && active) {
           const data = await res.json();
           setWorkloads(data.workloads || []);

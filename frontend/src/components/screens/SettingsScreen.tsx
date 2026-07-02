@@ -12,7 +12,7 @@ const TRUST_MODES = [
 
 const ISSUE_CATEGORIES = ['OOMKill', 'CrashLoopBackOff', 'ImagePullBackOff', 'Node pressure', 'Pending pods'];
 
-export default function SettingsScreen({ user, selectedCluster, clusters }: { user: any; selectedCluster: string; clusters: string[] }) {
+export default function SettingsScreen({ user, selectedCluster, clusters }: { user: { email?: string; [key: string]: unknown } | null; selectedCluster: string; clusters: string[] }) {
   const [category, setCategory] = useState('Trust & Automation');
   const [trustMode, setTrustMode] = useState('approve');
   const [enabledCategories, setEnabledCategories] = useState<Record<string, boolean>>({
