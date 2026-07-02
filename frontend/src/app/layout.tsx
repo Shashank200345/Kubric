@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { JetBrains_Mono } from "next/font/google";
+import { JetBrains_Mono, Inter } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
 
@@ -24,6 +24,13 @@ const jetbrainsMono = JetBrains_Mono({
   weight: ["400", "500", "600"],
 });
 
+const inter = Inter({
+  variable: "--font-inter",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "Kubric — AI-Powered Kubernetes Troubleshooting",
   description:
@@ -38,7 +45,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${thicccboi.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      className={`${thicccboi.variable} ${jetbrainsMono.variable} ${inter.variable} h-full antialiased`}
     >
       <head>
         <link
