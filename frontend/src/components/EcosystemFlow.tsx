@@ -51,8 +51,8 @@ const LINES = [
   { id: 'l-out2', group: 2,  d: roundedPath([[782, 374], [1024, 374]]) },
 ];
 
-const FEATURES_LEFT = ['Pod Inspector', 'Log Analysis', 'Event Triage', 'Root Cause AI', 'Crash Diagnosis'];
-const FEATURES_RIGHT = ['Network Probes', 'OOM Detection', 'Auto Remediation', 'Audit Trails', 'Multi-Cluster'];
+const FEATURES_LEFT = ['OOM Detection', 'Crash Diagnosis', 'Pre-deploy PR Risk'];
+const FEATURES_RIGHT = ['Event Triage', 'Root Cause AI'];
 
 /* ---- Kubernetes ecosystem logos (monochrome, currentColor) ---- */
 function KubernetesLogo() {
@@ -153,7 +153,7 @@ export default function EcosystemFlow() {
           background: transparent;
           border: none;
           border-radius: 0;
-          font-family: var(--font-thicccboi), system-ui, sans-serif;
+          font-family: var(--font-inter), system-ui, sans-serif;
         }
         .eco::before {
           content: "";
@@ -219,11 +219,11 @@ export default function EcosystemFlow() {
         }
         .eco-brand-name { font-size: 1.7cqw; font-weight: 700; letter-spacing: -0.02em; color: #fff; }
         .eco-pills { display: grid; grid-template-columns: 1fr 1fr; gap: 1.3cqw; flex: 1; min-height: 0; }
-        .eco-col { display: flex; flex-direction: column; justify-content: space-between; gap: 1cqw; }
+        .eco-col { display: flex; flex-direction: column; justify-content: space-evenly; }
         .eco-pill {
           display: flex; align-items: center; justify-content: center;
-          font-size: 0.92cqw; font-weight: 500; line-height: 1; letter-spacing: -0.01em;
-          padding: 0.85cqw 0.4cqw; border-radius: 0.75cqw; text-align: center; white-space: nowrap;
+          font-size: 1.1cqw; font-weight: 500; line-height: 1; letter-spacing: -0.01em;
+          padding: 1.3cqw 0.8cqw; border-radius: 0.75cqw; text-align: center; white-space: nowrap;
           color: #d4dbe2;
           background: rgba(255,255,255,0.04);
           border: 1px solid rgba(255,255,255,0.09);
@@ -320,12 +320,12 @@ export default function EcosystemFlow() {
         <div className="eco-pills">
           <div className="eco-col">
             {FEATURES_LEFT.map((f, i) => (
-              <span key={f} className={`eco-pill ${i >= 4 ? 'dim' : ''}`} style={{ animationDelay: `${i * 0.07}s` }}>{f}</span>
+              <span key={f} className="eco-pill" style={{ animationDelay: `${i * 0.07}s` }}>{f}</span>
             ))}
           </div>
           <div className="eco-col">
             {FEATURES_RIGHT.map((f, i) => (
-              <span key={f} className={`eco-pill ${i >= 3 ? 'dim' : ''}`} style={{ animationDelay: `${(i + 0.5) * 0.07}s` }}>{f}</span>
+              <span key={f} className="eco-pill" style={{ animationDelay: `${(i + 0.5) * 0.07}s` }}>{f}</span>
             ))}
           </div>
         </div>
