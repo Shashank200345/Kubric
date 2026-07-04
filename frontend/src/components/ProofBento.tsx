@@ -23,12 +23,12 @@ function smooth(points: { x: number; y: number }[]) {
 }
 
 const CHART_PTS = [
-  { x: 42, y: 40 },
-  { x: 114, y: 74 },
-  { x: 186, y: 62 },
-  { x: 258, y: 106 },
-  { x: 330, y: 132 },
-  { x: 400, y: 150 },
+  { x: 42, y: 28 },
+  { x: 114, y: 36 },
+  { x: 186, y: 52 },
+  { x: 258, y: 86 },
+  { x: 330, y: 128 },
+  { x: 400, y: 158 },
 ];
 
 const TRACE: { t: string; title: string; sub?: string; bad?: boolean; verdict?: boolean; badge?: string }[] = [
@@ -80,18 +80,18 @@ export default function ProofBento() {
         </button>
         <div className="b-ministats">
           <div className="b-ministat">
-            <span className="b-ministat-v">42s</span>
-            <span className="b-ministat-k">median RCA</span>
+            <span className="b-ministat-v">&lt;5m</span>
+            <span className="b-ministat-k">target MTTR</span>
           </div>
           <div className="b-ministat-div" />
           <div className="b-ministat">
             <span className="b-ministat-v">80%</span>
-            <span className="b-ministat-k">auto-resolved</span>
+            <span className="b-ministat-k">predicted preventable</span>
           </div>
           <div className="b-ministat-div" />
           <div className="b-ministat">
-            <span className="b-ministat-v b-ok">0</span>
-            <span className="b-ministat-k">3AM pages</span>
+            <span className="b-ministat-v b-ok">₹0</span>
+            <span className="b-ministat-k">free under 10 nodes</span>
           </div>
         </div>
       </div>
@@ -101,9 +101,9 @@ export default function ProofBento() {
         <div className="b-chart-head">
           <div>
             <div className="b-chart-label">Mean time to resolution</div>
-            <div className="b-chart-stat">9 min <span className="arrow-g">→</span> 42 sec</div>
+            <div className="b-chart-stat">43 min <span className="arrow-g">→</span> &lt; 5 min</div>
           </div>
-          <span className="b-chip">↓ 92% MTTR</span>
+          <span className="b-chip">TARGET · NOT YET MEASURED</span>
         </div>
         <svg className="b-chart-svg" viewBox="0 0 420 195">
           <defs>
@@ -118,9 +118,9 @@ export default function ProofBento() {
           </defs>
           {/* y grid + labels */}
           {[
-            { y: 40, l: '9m' },
-            { y: 96, l: '3m' },
-            { y: 150, l: '1m' },
+            { y: 30, l: '43m' },
+            { y: 90, l: '20m' },
+            { y: 150, l: '5m' },
           ].map((g) => (
             <g key={g.l}>
               <line x1="42" y1={g.y} x2="400" y2={g.y} stroke="rgba(255,255,255,0.05)" strokeWidth="1" strokeDasharray="2 6" />
@@ -128,7 +128,7 @@ export default function ProofBento() {
             </g>
           ))}
           {/* vertical guide to latest point */}
-          <line className="b-guide" x1="400" y1="150" x2="400" y2="172" stroke="rgba(124,255,178,0.4)" strokeWidth="1" strokeDasharray="2 3" />
+          <line className="b-guide" x1="400" y1="158" x2="400" y2="172" stroke="rgba(124,255,178,0.4)" strokeWidth="1" strokeDasharray="2 3" />
           <path className="b-area-path" d={area} fill="url(#b-area)" />
           <path className="b-line-path" d={line} fill="none" stroke="#7cffb2" strokeWidth="2" strokeLinecap="round" filter="url(#b-lineglow)" />
           <circle className="b-travel" r="4" fill="#7cffb2" style={{ offsetPath: `path("${line}")` } as React.CSSProperties} />
@@ -136,13 +136,13 @@ export default function ProofBento() {
             <circle key={i} className="b-pt" cx={p.x} cy={p.y} r="2.6" fill="#0b100d" stroke="#7cffb2" strokeWidth="1.5" style={{ animationDelay: `${(i * 0.28).toFixed(2)}s` }} />
           ))}
           {/* latest node + callout */}
-          <circle className="b-pt-live" cx="400" cy="150" r="5" fill="#7cffb2" />
+          <circle className="b-pt-live" cx="400" cy="158" r="5" fill="#7cffb2" />
           <g className="b-callout">
-            <rect x="344" y="120" width="58" height="22" fill="rgba(124,255,178,0.12)" stroke="rgba(124,255,178,0.4)" strokeWidth="0.75" />
-            <text x="373" y="135" textAnchor="middle" fontSize="11" fontWeight="600" fill="#7cffb2" fontFamily="var(--font-jetbrains-mono), monospace">42s</text>
+            <rect x="336" y="126" width="66" height="22" fill="rgba(124,255,178,0.12)" stroke="rgba(124,255,178,0.4)" strokeWidth="0.75" />
+            <text x="369" y="141" textAnchor="middle" fontSize="10" fontWeight="600" fill="#7cffb2" fontFamily="var(--font-jetbrains-mono), monospace">&lt; 5 min</text>
           </g>
         </svg>
-        <div className="b-chart-x"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>now</span></div>
+        <div className="b-chart-x"><span>Industry baseline*</span><span></span><span></span><span></span><span></span><span>Kubric target</span></div>
       </div>
 
       {/* ---------- CARD 3: radar — every cluster watched ---------- */}
