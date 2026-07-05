@@ -65,6 +65,131 @@ async def health_check():
         "service": "ai-kubernetes-agent"
     }
 
+
+# ============================================================
+# CLI API Endpoints (v1) — used by the kubric-cli
+# ============================================================
+import uuid
+import secrets
+from pydantic import BaseModel as BaseModel2
+from typing import Optional
+from fastapi import HTTPException, Header
+
+# In-memory store for device auth flows (production: use Redis or DB)
+_device_auth_flows: dict = {}
+
+class DeviceTokenRequest(BaseModel2):
+    device_code: str
+
+class ClusterConnectRequest(BaseModel2):
+    cluster_name: str
+
+
+@app.post("/v1/auth/device")
+async def cli_start_device_auth():
+    """Start the device auth flow for the CLI. Returns a verification URL and device code."""
+    device_code = secrets.token_urlsafe(32)
+    _device_auth_flows[device_code] = {
+        "approved": True,  # Auto-approve for local dev — set to False for real flow
+        "token": f"kubric_cli_{secrets.token_hex(16)}",
+        "email": "developer@kubric.dev",
+    }
+    
+    # In production this would be a real verification page
+    verification_url = "http://localhost:3001/cli/verify?code=" + device_code
+    
+    return {
+        "verification_url": verification_url,
+        "device_code": device_code,
+    }
+
+
+@app.post("/v1/auth/device/token")
+async def cli_poll_device_token(request: DeviceTokenRequest):
+    """Poll for the auth token after the user approves in the browser."""
+    from fastapi.responses import JSONResponse
+    
+    flow = _device_auth_flows.get(request.device_code)
+    if not flow:
+        raise HTTPException(status_code=404, detail="Unknown device code")
+    
+    if not flow["approved"]:
+        # 428 Precondition Required tells the CLI to keep polling
+        return JSONResponse(status_code=428, content={"detail": "Authorization pending"})
+    
+    return {
+        "token": flow["token"],
+        "email": flow["email"],
+    }
+
+
+@app.post("/v1/clusters/connect")
+async def cli_connect_cluster(request: ClusterConnectRequest, authorization: Optional[str] = Header(None)):
+    """Register a cluster and return the Helm values for installing the Kubric agent."""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Generate a per-cluster agent token
+    cluster_token = secrets.token_hex(32)
+    
+    return {
+        "helm_values": {
+            "agent.image.tag": "v0.1.0",
+            "agent.clusterName": request.cluster_name,
+            "agent.token": cluster_token,
+            "agent.ingestionEndpoint": "http://localhost:8000/v1/ingest",
+        }
+    }
+
+
+@app.get("/v1/status")
+async def cli_get_status(cluster: str = "", authorization: Optional[str] = Header(None)):
+    """Return a status snapshot for the CLI's `kubric status` command."""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    def _fetch_cluster_status():
+        """Synchronous kubectl calls — run in thread pool."""
+        pods_running = 0
+        pods_total = 0
+        
+        try:
+            from app.kubernetes.executor import KubectlExecutor as KE
+            
+            try:
+                pods_json = KE.run(
+                    "kubectl get pods -A -o json", parse_json=True
+                )
+                all_pods = pods_json.get("items", [])
+                pods_total = len(all_pods)
+                pods_running = sum(
+                    1 for p in all_pods
+                    if p.get("status", {}).get("phase") == "Running"
+                )
+            except Exception:
+                pass
+        except ImportError:
+            pass
+        
+        # Health score: simple heuristic based on pod health ratio
+        if pods_total > 0:
+            health_score = int((pods_running / pods_total) * 100)
+        else:
+            health_score = 100  # No pods = nothing unhealthy
+        
+        return {
+            "health_score": health_score,
+            "active_incidents": 0,
+            "pods_running": pods_running,
+            "pods_total": pods_total,
+            "prs_pending": 0,
+            "last_synced_seconds_ago": 5,
+        }
+    
+    import asyncio
+    return await asyncio.to_thread(_fetch_cluster_status)
+
+
 from app.kubernetes.service import InvestigationService
 from app.kubernetes.executor import KubectlExecutor, KubectlError
 from app.ai.agent import KubernetesAIAgent
@@ -323,8 +448,8 @@ _metrics_history: list[dict] = []  # stores last 30 samples
 _MAX_HISTORY = 30
 
 
-async def _collect_metrics_sample():
-    """Collects a single metrics snapshot and appends to history."""
+def _collect_metrics_sample_sync():
+    """Collects a single metrics snapshot (runs in thread pool, not on event loop)."""
     try:
         sample = {
             "ts": datetime.utcnow().isoformat(),
@@ -372,7 +497,8 @@ async def _collect_metrics_sample():
 async def _metrics_collector_loop():
     """Background loop that collects a sample every 10 seconds."""
     while True:
-        await _collect_metrics_sample()
+        # Run in thread pool so synchronous subprocess calls don't block the event loop
+        await asyncio.to_thread(_collect_metrics_sample_sync)
         await asyncio.sleep(10)
 
 

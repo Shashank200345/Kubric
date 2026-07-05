@@ -23,11 +23,14 @@ class KubectlExecutor:
             The raw string output, parsed JSON dict, or raises KubectlError.
         """
         
-        if context:
-            # Insert --context right after kubectl
-            parts = command.split(" ", 1)
-            if len(parts) == 2 and parts[0] == "kubectl":
-                command = f"kubectl --context={context} {parts[1]}"
+        parts = command.split(" ", 1)
+        if len(parts) == 2 and parts[0] == "kubectl":
+            # Inject --request-timeout so the kubectl process itself times out quickly
+            # rather than relying solely on Python's subprocess timeout (which leaves zombies on Windows)
+            base_args = "--request-timeout=5s"
+            if context:
+                base_args += f" --context={context}"
+            command = f"kubectl {base_args} {parts[1]}"
                 
         logger.info(f"Executing: {command}")
         try:
@@ -37,7 +40,8 @@ class KubectlExecutor:
                 check=True, 
                 stdout=subprocess.PIPE, 
                 stderr=subprocess.PIPE, 
-                text=True
+                text=True,
+                timeout=10
             )
             
             output = result.stdout.strip()
@@ -65,6 +69,10 @@ class KubectlExecutor:
                 raise KubectlError(f"Invalid cluster context: {context}. Please check your kubeconfig.")
                 
             raise KubectlError(f"Kubernetes command failed: {err_output}")
+            
+        except subprocess.TimeoutExpired:
+            logger.error(f"Command timed out after 10s: {command}")
+            raise KubectlError("Kubernetes command timed out. The cluster may be unreachable.")
             
         except Exception as e:
             logger.error(f"Unexpected error executing command: {e}")
