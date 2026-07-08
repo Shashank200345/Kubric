@@ -36,6 +36,18 @@ class InsForgeClient:
                     "step": step,
                     "status": "running",
                 }
+                # Fetch fallback user_id if not provided
+                if not user_id:
+                    try:
+                        usr_resp = await client.get(
+                            f"{self.base_url}/investigations?select=user_id&limit=1&user_id=not.is.null",
+                            headers=self.headers
+                        )
+                        if usr_resp.status_code == 200 and usr_resp.json():
+                            user_id = usr_resp.json()[0].get("user_id")
+                    except Exception:
+                        pass
+                
                 if user_id:
                     payload["user_id"] = user_id
 
@@ -92,3 +104,57 @@ class InsForgeClient:
                 logger.info(f"Completed investigation {investigation_id}")
             except Exception as e:
                 logger.error(f"Failed to complete investigation {investigation_id}: {e}")
+
+    async def validate_cluster_token(self, cluster_token: str) -> str | None:
+        """Validates a cluster_token against the clusters table and returns the associated user_id."""
+        if not self.url:
+            return None
+        async with httpx.AsyncClient() as client:
+            try:
+                resp = await client.get(
+                    f"{self.base_url}/clusters?cluster_token=eq.{cluster_token}&select=user_id",
+                    headers=self.headers,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                if data and len(data) > 0:
+                    return data[0].get("user_id")
+            except Exception as e:
+                logger.error(f"Failed to validate cluster token: {e}")
+        return None
+
+    async def create_investigation(self, cluster_context: str, user_id: str = None) -> str | None:
+        """Create a new investigation record from a push agent."""
+        if not self.url:
+            return None
+            
+        async with httpx.AsyncClient() as client:
+            try:
+                # Prefer: return=representation tells PostgREST to return the inserted row
+                headers = {**self.headers, "Prefer": "return=representation"}
+                payload = {
+                    "cluster_context": cluster_context,
+                    "status": "running"
+                }
+                
+                if user_id:
+                    payload["user_id"] = user_id
+                else:
+                    logger.warning("No user_id provided for investigation creation. RLS policies may hide this row.")
+                    payload["user_id"] = user_id
+                
+                resp = await client.post(
+                    f"{self.base_url}/investigations",
+                    headers=headers,
+                    json=payload
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                if data and len(data) > 0:
+                    logger.info(f"Created new investigation {data[0].get('id')}")
+                    return data[0].get("id")
+            except Exception as e:
+                logger.error(f"Failed to create investigation: {e}")
+                if hasattr(e, 'response') and e.response:
+                    logger.error(f"Response: {e.response.text}")
+        return None
