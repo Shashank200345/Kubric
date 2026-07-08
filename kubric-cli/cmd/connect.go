@@ -8,12 +8,18 @@ import (
 	"strconv"
 	"strings"
 
+	"time"
+
 	"github.com/kubric-dev/kubric-cli/internal/api"
 	"github.com/kubric-dev/kubric-cli/internal/config"
 	"github.com/kubric-dev/kubric-cli/internal/output"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
+
+// agentChartRef points at the local placeholder chart for testing.
+// TODO: swap to "kubric/kubric-agent" once the chart is published to a real Helm repo.
+const agentChartRef = "./charts/kubric-agent"
 
 var connectCmd = &cobra.Command{
 	Use:   "connect",
@@ -137,7 +143,7 @@ func runConnect(cmd *cobra.Command, args []string) error {
 		output.Info("Installing Kubric agent via Helm...")
 		fmt.Println()
 
-		helmCmd := exec.Command("helm", "upgrade", "--install", "kubric-agent", "kubric/kubric-agent",
+		helmCmd := exec.Command("helm", "upgrade", "--install", "kubric-agent", agentChartRef,
 			"--namespace", "kubric-system",
 			"--create-namespace",
 			"--values", tmpFile.Name(),
@@ -161,10 +167,22 @@ func runConnect(cmd *cobra.Command, args []string) error {
 		// Don't exit — the registration succeeded, config is a non-fatal issue
 	}
 
-	// 7. Print success summary
-	fmt.Println()
-	output.Success(fmt.Sprintf("Cluster \"%s\" connected to Kubric", selectedCluster))
-	fmt.Println("  Run `kubric status` to check on it.")
+	// 7. Wait 3 seconds, then call status once automatically
+	time.Sleep(3 * time.Second)
+	status, err := client.GetStatus(selectedCluster)
+	if err != nil {
+		fmt.Println()
+		output.Success("Kubric is watching your cluster")
+		fmt.Println("  (first status check will be ready in a minute — check the dashboard at app.kubric.dev)")
+	} else {
+		fmt.Println()
+		output.Success("Kubric is watching your cluster")
+		fmt.Println()
+		fmt.Printf("  %s · synced %ds ago\n", selectedCluster, status.LastSyncedSecondsAgo)
+		fmt.Printf("  Health score: %s\n", output.ColorizeHealthScore(status.HealthScore))
+		fmt.Printf("  Active incidents: %d\n", status.ActiveIncidents)
+		fmt.Printf("  Pods: %d/%d running\n", status.PodsRunning, status.PodsTotal)
+	}
 
 	return nil
 }

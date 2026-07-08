@@ -12,14 +12,9 @@ var jsonOutput bool
 // rootCmd is the base command for the kubric CLI.
 var rootCmd = &cobra.Command{
 	Use:   "kubric",
-	Short: "The Kubric CLI — pre-deployment intelligence for Kubernetes.",
-	Long: `Kubric CLI connects your Kubernetes clusters to Kubric's intelligence 
-platform and gives you a quick status check from the terminal.
-
-Available commands:
-  login    Authenticate with your Kubric account
-  connect  Install the Kubric agent on a cluster
-  status   Check cluster health at a glance`,
+	Short: "The Kubric CLI — connects your cluster to Kubric.",
+	Long: `The Kubric CLI connects your Kubernetes clusters to Kubric's intelligence 
+platform by installing the in-cluster agent.`,
 }
 
 // Execute is called from main.go to run the root command.
