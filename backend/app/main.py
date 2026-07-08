@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, BackgroundTasks, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 from dotenv import load_dotenv
@@ -177,9 +177,11 @@ async def cli_get_status(cluster: str = "", authorization: Optional[str] = Heade
         else:
             health_score = 100  # No pods = nothing unhealthy
         
+        # Use real incident count from the detection poller
+        active_incidents = incident_poller.get_active_incident_count(cluster or "minikube")
         return {
             "health_score": health_score,
-            "active_incidents": 0,
+            "active_incidents": active_incidents,
             "pods_running": pods_running,
             "pods_total": pods_total,
             "prs_pending": 0,
@@ -195,12 +197,19 @@ from app.kubernetes.executor import KubectlExecutor, KubectlError
 from app.ai.agent import KubernetesAIAgent
 from app.insforge_client import InsForgeClient
 from pydantic import BaseModel
-from typing import Optional, Any
+from typing import Optional, Any, Dict
 from fastapi import HTTPException, Header
 
 class InvestigationRequest(BaseModel):
     investigation_id: str
     cluster_context: Optional[str] = None
+
+class AgentIngestRequest(BaseModel):
+    cluster_context: str
+    reason: str
+    pod_name: str
+    namespace: str
+    evidence: Dict[str, Any]
 
 @app.get("/clusters")
 async def get_clusters():
@@ -435,8 +444,60 @@ async def investigate_cluster(request: InvestigationRequest, authorization: Opti
             
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"Unexpected error during investigation: {str(e)}")
         raise HTTPException(status_code=500, detail="An internal error occurred during the investigation.")
+
+async def process_incident_background(investigation_id: str, evidence: dict):
+    """Background task to run AI reasoning without blocking the ingest HTTP response."""
+    client = InsForgeClient()
+    try:
+        await client.update_progress(investigation_id, "AI Reasoning")
+        ai_agent = KubernetesAIAgent()
+        diagnosis = await ai_agent.analyze(evidence)
+        await client.complete_investigation(investigation_id, diagnosis)
+    except Exception as e:
+        logger.error(f"Background AI processing failed: {e}")
+        failure_diagnosis = {
+            "root_cause": str(e),
+            "explanation": "The AI Agent failed to process the evidence.",
+            "fix": "Please check the backend logs for rate limits or errors.",
+            "kubectl_command": None,
+            "confidence": 0
+        }
+        await client.complete_investigation(investigation_id, failure_diagnosis)
+
+@app.post("/api/v1/ingest")
+async def ingest_incident(request: AgentIngestRequest, background_tasks: BackgroundTasks, authorization: Optional[str] = Header(None)):
+    """Receives incident evidence from the in-cluster push agent."""
+    logger.info(f"Ingesting incident from agent for cluster: {request.cluster_context} (pod: {request.pod_name})")
+    
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
+        
+    cluster_token = authorization.split("Bearer ")[1].strip()
+    client = InsForgeClient()
+    
+    # 1. Validate the token against the clusters table
+    user_id = await client.validate_cluster_token(cluster_token)
+    if not user_id:
+        logger.warning(f"Unauthorized cluster token: {cluster_token}")
+        raise HTTPException(status_code=401, detail="Invalid cluster token")
+        
+    try:
+        # 2. Create a new investigation in DB for this user
+        investigation_id = await client.create_investigation(cluster_context=request.cluster_context, user_id=user_id)
+        
+        if not investigation_id:
+            logger.error("Failed to create investigation in DB during ingestion.")
+            raise HTTPException(status_code=500, detail="Database error")
+            
+        # 2. Queue AI Reasoning in background
+        background_tasks.add_task(process_incident_background, investigation_id, request.evidence)
+        
+        # 3. Immediately return 200 OK so the agent is not blocked
+        return {"status": "success", "investigation_id": investigation_id, "message": "Incident queued for AI analysis"}
+    except Exception as e:
+        logger.error(f"Unexpected error during ingestion: {str(e)}")
+        raise HTTPException(status_code=500, detail="An internal error occurred during ingestion.")
 
 
 # --- Metrics History (in-memory time-series for the chart) ---
@@ -514,6 +575,9 @@ async def get_metrics_history():
     Each sample: { ts, cpu_pct, memory_pct, pod_count }
     """
     return {"samples": _metrics_history}
+
+
+
 
 
 # ============================================================
