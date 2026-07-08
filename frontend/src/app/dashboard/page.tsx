@@ -24,6 +24,7 @@ interface ProgressStep {
 interface Investigation {
   id: string;
   user_id: string;
+  cluster_context: string | null;
   status: string;
   root_cause: string | null;
   explanation: string | null;
@@ -50,6 +51,7 @@ export default function Dashboard() {
 
   const [clusters, setClusters] = useState<string[]>([]);
   const [selectedCluster, setSelectedCluster] = useState<string>('');
+  const [investigationFilter, setInvestigationFilter] = useState<string>('all');
 
   const [activeScreen, setActiveScreen] = useState<string>('overview');
   const [cmdkOpen, setCmdkOpen] = useState(false);
@@ -84,6 +86,18 @@ export default function Dashboard() {
       setInvestigations(data as Investigation[]);
     }
   };
+
+  useEffect(() => {
+    // Global listener for new investigations pushed by the agent
+    const channel = insforge.realtime.subscribe('investigations:all');
+    insforge.realtime.on('investigations_updated', (msg) => {
+      // Automatically refresh history when a new investigation arrives
+      fetchHistory();
+    });
+    return () => {
+      insforge.realtime.unsubscribe('investigations:all');
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -142,127 +156,6 @@ export default function Dashboard() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, []);
-
-  const handleInvestigate = async () => {
-    if (isInvestigating || !user) return;
-    setActiveScreen('troubleshoot');
-    setIsInvestigating(true);
-    setCurrentInvestigation(null);
-    setProgressSteps([]);
-    setError(null);
-
-    try {
-      const { data: invData, error: insertError } = await insforge.database
-        .from('investigations')
-        .insert([{ user_id: user.id }])
-        .select()
-        .single();
-
-      if (insertError) throw insertError;
-
-      const inv = invData as Investigation;
-      setCurrentInvestigation(inv);
-
-      const channel = `investigation:${inv.id}`;
-      channelRef.current = channel;
-      const response = await insforge.realtime.subscribe(channel);
-
-      if (!response.ok) {
-        console.error("Realtime subscribe failed:", response.error?.message);
-      }
-
-      insforge.realtime.on('progress_updated', (message: RealtimeMessage) => {
-        if (message.meta?.channel !== channel) return;
-
-        if (message.step) {
-          setProgressSteps(prev => {
-            if (prev.find(p => p.id === message.id)) return prev;
-            return [...prev, message as ProgressStep];
-          });
-        }
-
-        if (message.status === 'completed') {
-          setCurrentInvestigation(message as Investigation);
-          setIsInvestigating(false);
-          insforge.realtime.unsubscribe(channel);
-          channelRef.current = null;
-          fetchHistory();
-        }
-
-        if (message.status === 'failed') {
-          setError('Investigation failed. Check backend logs.');
-          setIsInvestigating(false);
-          insforge.realtime.unsubscribe(channel);
-          channelRef.current = null;
-        }
-      });
-
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 120_000);
-
-      // Fallback polling for progress in case realtime is blocked or RLS prevents frontend reads
-      const pollInterval = setInterval(async () => {
-        try {
-          const res = await fetch(`${API_BASE}/investigate/${inv.id}/progress`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data.progress && data.progress.length > 0) {
-              setProgressSteps(data.progress as ProgressStep[]);
-            }
-          }
-        } catch (e) {
-          console.error("Progress polling failed:", e);
-        }
-      }, 1000);
-
-      try {
-        const res = await fetch(`${API_BASE}/investigate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            investigation_id: inv.id,
-            cluster_context: selectedCluster || null
-          }),
-          signal: controller.signal,
-        });
-        clearTimeout(timeout);
-        clearInterval(pollInterval);
-
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error(body.detail || 'Backend investigation failed');
-        }
-
-        const { data: finalInv } = await insforge.database
-          .from('investigations')
-          .select('*')
-          .eq('id', inv.id)
-          .single();
-
-        if (finalInv) {
-          setCurrentInvestigation(finalInv as Investigation);
-        }
-
-      } catch (fetchErr) {
-        clearTimeout(timeout);
-        clearInterval(pollInterval);
-        if (fetchErr instanceof DOMException && fetchErr.name === 'AbortError') {
-          setError('Investigation timed out after 2 minutes.');
-        } else {
-          setError(fetchErr instanceof Error ? fetchErr.message : 'Failed to reach backend.');
-        }
-      }
-
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred.');
-    } finally {
-      setIsInvestigating(false);
-      if (channelRef.current) {
-        insforge.realtime.unsubscribe(channelRef.current);
-        channelRef.current = null;
-      }
-    }
-  };
 
   const handleSignOut = async () => {
     if (channelRef.current) insforge.realtime.unsubscribe(channelRef.current);
@@ -327,6 +220,11 @@ export default function Dashboard() {
     "Checking Pods", "Reading Logs", "Analyzing Events",
     "Inspecting Deployments", "Checking Networking", "AI Reasoning",
   ];
+
+  const availableFilters = Array.from(new Set(investigations.map(inv => inv.cluster_context).filter(Boolean))) as string[];
+  const filteredInvestigations = investigations.filter(inv => 
+    investigationFilter === 'all' || inv.cluster_context === investigationFilter
+  );
 
   return (
     <div className="kb">
@@ -411,9 +309,10 @@ export default function Dashboard() {
                     </p>
                   </div>
                   <div className="kb-welcome-actions">
-                    <button className="kb-btn primary" onClick={handleInvestigate} disabled={isInvestigating || !selectedCluster}>
-                      {isInvestigating ? <><span className="kb-spinner sm" /> Investigating…</> : '+ Run investigation'}
-                    </button>
+                    <span className="kb-agent-status" style={{display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 16px', background: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', borderRadius: '20px', fontSize: '0.875rem', fontWeight: 500}}>
+                      <span className="kb-dot pulse" style={{background: '#38bdf8'}}></span>
+                      Agent active
+                    </span>
                     <button className="kb-btn" onClick={() => setActiveScreen('troubleshoot')}>Troubleshoot →</button>
                   </div>
                 </div>
@@ -473,18 +372,30 @@ export default function Dashboard() {
                 <div className="kb-card">
                   <div className="kb-col-header">
                     <span className="kb-col-title">Recent investigations</span>
-                    <span className="kb-count">{investigations.length}</span>
+                    <span className="kb-count">{filteredInvestigations.length}</span>
+                    <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
+                       <select 
+                         value={investigationFilter} 
+                         onChange={e => setInvestigationFilter(e.target.value)}
+                         className="kb-search-input"
+                         style={{ padding: '2px 8px', border: '0.5px solid var(--bd)', borderRadius: '4px', background: 'var(--s2)' }}
+                       >
+                         <option value="all">All clusters</option>
+                         {availableFilters.map(c => <option key={c} value={c}>{c}</option>)}
+                       </select>
+                    </div>
                   </div>
-                  {investigations.length === 0 ? (
+                  {filteredInvestigations.length === 0 ? (
                     <div className="kb-empty tall">No investigations yet. Run your first analysis.</div>
                   ) : (
                     <div className="kb-table-wrap">
                       <table className="kb-table">
-                        <thead><tr><th>Date</th><th>Root cause</th><th>Confidence</th><th>Status</th></tr></thead>
+                        <thead><tr><th>Date</th><th>Cluster</th><th>Root cause</th><th>Confidence</th><th>Status</th></tr></thead>
                         <tbody>
-                          {investigations.map(inv => (
+                          {filteredInvestigations.map(inv => (
                             <tr key={inv.id} onClick={() => viewHistoryItem(inv)}>
                               <td className="kb-td-date">{new Date(inv.created_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
+                              <td>{inv.cluster_context ? <span className="kb-cluster-pill"><span className="kb-dot"></span>{inv.cluster_context}</span> : <span style={{color: 'var(--t3)'}}>—</span>}</td>
                               <td className="kb-td-cause">{inv.root_cause || <span className="kb-td-healthy">✓ Healthy</span>}</td>
                               <td className="kb-td-conf">
                                 {inv.confidence != null && inv.confidence > 0 ? (
@@ -511,9 +422,10 @@ export default function Dashboard() {
                     <p className="kb-welcome-sub">{selectedCluster || 'no cluster selected'} · AI root-cause analysis</p>
                   </div>
                   <div className="kb-welcome-actions">
-                    <button className="kb-btn primary" onClick={handleInvestigate} disabled={isInvestigating || !selectedCluster}>
-                      {isInvestigating ? <><span className="kb-spinner sm" /> Investigating…</> : 'Investigate cluster →'}
-                    </button>
+                    <span className="kb-agent-status" style={{display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 16px', background: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', borderRadius: '20px', fontSize: '0.875rem', fontWeight: 500}}>
+                      <span className="kb-dot pulse" style={{background: '#38bdf8'}}></span>
+                      Agent active
+                    </span>
                   </div>
                 </div>
 
@@ -611,17 +523,32 @@ export default function Dashboard() {
 
                 {/* history */}
                 <section className="kb-card">
-                  <div className="kb-col-header"><span className="kb-col-title">Previous investigations</span><span className="kb-count">{investigations.length}</span></div>
-                  {investigations.length === 0 ? (
-                    <div className="kb-empty tall">No investigations yet. Run your first analysis above.</div>
+                  <div className="kb-col-header">
+                    <span className="kb-col-title">Previous investigations</span>
+                    <span className="kb-count">{filteredInvestigations.length}</span>
+                    <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
+                       <select 
+                         value={investigationFilter} 
+                         onChange={e => setInvestigationFilter(e.target.value)}
+                         className="kb-search-input"
+                         style={{ padding: '2px 8px', border: '0.5px solid var(--bd)', borderRadius: '4px', background: 'var(--s2)' }}
+                       >
+                         <option value="all">All clusters</option>
+                         {availableFilters.map(c => <option key={c} value={c}>{c}</option>)}
+                       </select>
+                    </div>
+                  </div>
+                  {filteredInvestigations.length === 0 ? (
+                    <div className="kb-empty tall">No investigations found.</div>
                   ) : (
                     <div className="kb-table-wrap">
                       <table className="kb-table">
-                        <thead><tr><th>Date</th><th>Root cause</th><th>Confidence</th><th>Status</th></tr></thead>
+                        <thead><tr><th>Date</th><th>Cluster</th><th>Root cause</th><th>Confidence</th><th>Status</th></tr></thead>
                         <tbody>
-                          {investigations.map(inv => (
+                          {filteredInvestigations.map(inv => (
                             <tr key={inv.id} onClick={() => viewHistoryItem(inv)}>
                               <td className="kb-td-date">{new Date(inv.created_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
+                              <td>{inv.cluster_context ? <span className="kb-cluster-pill"><span className="kb-dot"></span>{inv.cluster_context}</span> : <span style={{color: 'var(--t3)'}}>—</span>}</td>
                               <td className="kb-td-cause">{inv.root_cause || <span className="kb-td-healthy">✓ Healthy</span>}</td>
                               <td className="kb-td-conf">
                                 {inv.confidence != null && inv.confidence > 0 ? (
