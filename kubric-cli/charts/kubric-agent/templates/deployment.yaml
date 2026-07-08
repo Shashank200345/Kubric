@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubric-agent
+  namespace: kubric-system
+  labels:
+    {{- include "kubric-agent.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kubric-agent
+  template:
+    metadata:
+      labels:
+        app: kubric-agent
+    spec:
+      serviceAccountName: kubric-agent
+      containers:
+        - name: kubric-agent
+          image: "{{ .Values.agent.image.repository }}:{{ .Values.agent.image.tag }}"
+          imagePullPolicy: {{ .Values.agent.image.pullPolicy }}
+          env:
+            - name: CLUSTER_NAME
+              value: "{{ .Values.agent.clusterName }}"
+            - name: INGESTION_ENDPOINT
+              value: "{{ .Values.agent.ingestionEndpoint }}"
+            - name: CLUSTER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: kubric-agent-credentials
+                  key: clusterToken
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          livenessProbe:
+            exec:
+              command: ["pgrep", "python"]
+            initialDelaySeconds: 5
+            periodSeconds: 15
