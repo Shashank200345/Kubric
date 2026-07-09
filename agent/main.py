@@ -23,7 +23,7 @@ _incidents: Dict[Tuple[str, str, str], dict] = {}
 _CRASH_REASON = "CrashLoopBackOff"
 _OOM_REASON = "OOMKilled"
 
-BACKEND_INGEST_URL = os.getenv("INGESTION_ENDPOINT", "http://host.docker.internal:8000/api/v1/ingest")
+BACKEND_INGEST_URL = os.getenv("INGESTION_ENDPOINT", "http://host.minikube.internal:8000/api/v1/ingest")
 CLUSTER_TOKEN = os.getenv("CLUSTER_TOKEN", "default-token")
 CLUSTER_NAME = os.getenv("CLUSTER_NAME", "minikube")
 
