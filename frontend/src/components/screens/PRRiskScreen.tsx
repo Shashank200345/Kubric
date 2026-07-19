@@ -85,8 +85,8 @@ export default function PRRiskScreen() {
             <div className="kb-pr-foot">
               {pr.commented && <span className="kb-pr-commented">✓ Kubric commented on PR</span>}
               <div className="kb-pr-actions">
-                <button className="kb-btn">View PR</button>
-                {pr.risk === 'high' && <button className="kb-btn primary">Suggest fix on PR</button>}
+                <button className="kb-btn" disabled title="Connect the GitHub App to open live pull requests">View PR</button>
+                {pr.risk === 'high' && <button className="kb-btn primary" disabled title="Connect the GitHub App to post suggested fixes">Suggest fix on PR</button>}
               </div>
             </div>
           </div>
