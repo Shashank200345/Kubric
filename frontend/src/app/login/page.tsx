@@ -92,7 +92,7 @@ export default function LoginPage() {
         <div className="au-brand-glow" aria-hidden />
         <Link className="au-brand-logo" href="/">
           <img src="/kubric-logo.png" alt="Kubric" />
-          <span>Kubric</span>
+          <span className="au-wordmark"><span className="k">K</span>UBRIC</span>
         </Link>
         <div className="au-brand-mid">
           <h1 className="au-brand-title">The autonomous SRE<br />for Kubernetes.</h1>
@@ -110,9 +110,19 @@ export default function LoginPage() {
 
       {/* ── right form panel ── */}
       <main className="au-main">
+        {!showOtp && (
+          <button
+            type="button"
+            className="au-topright"
+            onClick={() => { setIsSignUp(!isSignUp); setError(null); setMessage(null); }}
+          >
+            {isSignUp ? 'Have an account? Sign in →' : 'Need an account? Create one →'}
+          </button>
+        )}
         <div className="au-card">
           <Link className="au-mobile-logo" href="/">
-            <img src="/kubric-logo.png" alt="Kubric" />
+            <img src="/kubric-logo.png" alt="" />
+            <span className="au-wordmark"><span className="k">K</span>UBRIC</span>
           </Link>
 
           <div className="au-head">
@@ -145,6 +155,15 @@ export default function LoginPage() {
                   placeholder="••••••••"
                   className="au-input"
                 />
+              </div>
+            )}
+
+            {!showOtp && !isSignUp && (
+              <div className="au-row">
+                <label className="au-remember">
+                  <input type="checkbox" defaultChecked /> Remember me
+                </label>
+                <a className="au-forgot" href="#" onClick={(e) => e.preventDefault()}>Forgot?</a>
               </div>
             )}
 
@@ -212,10 +231,11 @@ export default function LoginPage() {
         .au-brand-glow { position: absolute; top: -120px; left: -120px; width: 460px; height: 460px; background: radial-gradient(circle, rgba(124,255,178,0.16), transparent 60%); pointer-events: none; animation: au-breathe 7s ease-in-out infinite; }
         @keyframes au-breathe { 0%,100%{ opacity:.6; transform: scale(1) } 50%{ opacity:1; transform: scale(1.1) } }
         .au-brand-logo { position: relative; display: inline-flex; align-items: center; gap: 11px; text-decoration: none; }
-        .au-brand-logo img { height: 34px; width: auto; }
-        .au-brand-logo span { font-size: 18px; font-weight: 600; color: #eef2f5; letter-spacing: -0.01em; }
+        .au-brand-logo img { height: 56px; width: auto; transform: translateY(3px); }
+        .au-wordmark { font-family: "Fredoka", system-ui, sans-serif; font-weight: 600; font-size: 22px; letter-spacing: 0.1em; color: #f4f7f9; transform: translateY(-1px); }
+        .au-wordmark .k { color: #7cffb2; }
         .au-brand-mid { position: relative; }
-        .au-brand-title { font-size: clamp(30px, 3vw, 42px); font-weight: 600; line-height: 1.1; letter-spacing: -0.02em; color: #f4f7f9; margin: 0 0 16px; }
+        .au-brand-title { font-family: var(--font-lexend), system-ui, sans-serif; font-size: clamp(30px, 3vw, 42px); font-weight: 400; line-height: 1.1; letter-spacing: -0.02em; color: #f4f7f9; margin: 0 0 16px; }
         .au-brand-lede { font-size: 15px; line-height: 1.6; color: rgba(255,255,255,0.55); max-width: 400px; margin: 0 0 28px; }
         .au-brand-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 13px; }
         .au-brand-list li { display: flex; align-items: center; gap: 11px; font-size: 14px; color: rgba(255,255,255,0.72); }
@@ -223,17 +243,24 @@ export default function LoginPage() {
         .au-brand-foot { position: relative; font-family: var(--font-jetbrains-mono), monospace; font-size: 11px; color: rgba(255,255,255,0.3); }
 
         /* right form */
-        .au-main { display: flex; align-items: center; justify-content: center; padding: 40px 24px; }
+        .au-main { position: relative; display: flex; align-items: center; justify-content: center; padding: 40px 24px; }
+        .au-topright { position: absolute; top: 32px; right: 40px; background: none; border: none; cursor: pointer; font-family: inherit; font-size: 13px; color: rgba(255,255,255,0.5); transition: color .2s ease; }
+        .au-topright:hover { color: #7cffb2; }
+        .au-row { display: flex; align-items: center; justify-content: space-between; margin-top: -2px; }
+        .au-remember { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: rgba(255,255,255,0.55); cursor: pointer; }
+        .au-remember input { width: 14px; height: 14px; accent-color: #7cffb2; cursor: pointer; }
+        .au-forgot { font-size: 12.5px; color: rgba(255,255,255,0.55); text-decoration: none; }
+        .au-forgot:hover { color: #7cffb2; }
         .au-card { width: 100%; max-width: 400px; }
-        .au-mobile-logo { display: none; margin-bottom: 24px; }
-        .au-mobile-logo img { height: 38px; }
+        .au-mobile-logo { display: none; align-items: center; gap: 4px; margin-bottom: 24px; text-decoration: none; }
+        .au-mobile-logo img { height: 40px; }
         .au-head { margin-bottom: 28px; }
-        .au-title { font-size: 26px; font-weight: 600; letter-spacing: -0.01em; color: #f4f7f9; margin: 0 0 7px; }
+        .au-title { font-family: var(--font-lexend), system-ui, sans-serif; font-size: 26px; font-weight: 400; letter-spacing: -0.01em; color: #f4f7f9; margin: 0 0 7px; }
         .au-sub { font-size: 14px; color: rgba(255,255,255,0.5); margin: 0; line-height: 1.5; }
 
         .au-form { display: flex; flex-direction: column; gap: 16px; }
         .au-field { display: flex; flex-direction: column; gap: 7px; }
-        .au-label { font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.6); }
+        .au-label { font-size: 12px; font-weight: 400; color: rgba(255,255,255,0.6); }
         .au-input {
           width: 100%; padding: 12px 14px; font-size: 14px; font-family: inherit;
           color: #eef2f5; background: rgba(255,255,255,0.03);
@@ -252,7 +279,7 @@ export default function LoginPage() {
         .au-btn {
           display: inline-flex; align-items: center; justify-content: center; gap: 8px;
           width: 100%; padding: 13px; margin-top: 4px; cursor: pointer;
-          font-size: 14px; font-weight: 600; font-family: inherit; color: #05140c;
+          font-size: 14px; font-weight: 400; font-family: inherit; color: #05140c;
           background: #7cffb2; border: none; transition: background .18s ease, transform .18s ease;
         }
         .au-btn:hover:not(:disabled) { background: #9dffc6; }
@@ -269,7 +296,7 @@ export default function LoginPage() {
         .au-divider { display: flex; align-items: center; gap: 12px; margin: 22px 0; color: rgba(255,255,255,0.3); font-size: 11px; }
         .au-divider::before, .au-divider::after { content: ''; flex: 1; height: 0.5px; background: rgba(255,255,255,0.1); }
         .au-switch { text-align: center; font-size: 13px; color: rgba(255,255,255,0.5); margin: 0; }
-        .au-switch button { background: none; border: none; color: #7cffb2; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; padding: 0; }
+        .au-switch button { background: none; border: none; color: #7cffb2; font-family: inherit; font-size: 13px; font-weight: 400; cursor: pointer; padding: 0; }
         .au-switch button:hover { text-decoration: underline; }
 
         @media (max-width: 880px) {
