@@ -34,6 +34,9 @@ spec:
             {{- toYaml .Values.resources | nindent 12 }}
           livenessProbe:
             exec:
-              command: ["pgrep", "python"]
-            initialDelaySeconds: 5
+              command:
+                - sh
+                - -c
+                - "test $(($(date +%s) - $(stat -c %Y /tmp/kubric-heartbeat 2>/dev/null || echo 0))) -lt 60"
+            initialDelaySeconds: 10
             periodSeconds: 15
