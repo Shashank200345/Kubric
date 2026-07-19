@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { insforge } from '@/lib/insforge';
 
 const CATEGORIES = ['Clusters', 'Integrations', 'Trust & Automation', 'Notifications', 'Team', 'API Keys', 'Billing'];
 
@@ -12,14 +13,38 @@ const TRUST_MODES = [
 
 const ISSUE_CATEGORIES = ['OOMKill', 'CrashLoopBackOff', 'ImagePullBackOff', 'Node pressure', 'Pending pods'];
 
-export default function SettingsScreen({ user, selectedCluster, clusters }: { user: { email?: string; [key: string]: unknown } | null; selectedCluster: string; clusters: string[] }) {
-  const [category, setCategory] = useState('Trust & Automation');
+export default function SettingsScreen({ user, selectedCluster, clusters, fetchClusters }: { user: { id: string; email?: string; [key: string]: unknown } | null; selectedCluster: string; clusters: string[], fetchClusters?: () => void }) {
+  const [category, setCategory] = useState('Clusters');
   const [trustMode, setTrustMode] = useState('approve');
   const [enabledCategories, setEnabledCategories] = useState<Record<string, boolean>>({
     'OOMKill': true, 'CrashLoopBackOff': true, 'ImagePullBackOff': false, 'Node pressure': false, 'Pending pods': false,
   });
 
+  const [newClusterName, setNewClusterName] = useState('');
+  const [isAdding, setIsAdding] = useState(false);
+  const [generatedToken, setGeneratedToken] = useState<string | null>(null);
+
   const toggle = (cat: string) => setEnabledCategories(prev => ({ ...prev, [cat]: !prev[cat] }));
+
+  const handleAddCluster = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newClusterName.trim() || !user?.id) return;
+    
+    setIsAdding(true);
+    const { data, error } = await insforge.database
+      .from('clusters')
+      .insert([{ user_id: user.id, cluster_name: newClusterName.trim() }])
+      .select('cluster_token')
+      .single();
+
+    if (!error && data) {
+      setGeneratedToken(data.cluster_token);
+      if (fetchClusters) fetchClusters();
+    } else {
+      console.error("Failed to generate cluster token:", error);
+    }
+    setIsAdding(false);
+  };
 
   return (
     <div className="kb-screen">
@@ -74,18 +99,55 @@ export default function SettingsScreen({ user, selectedCluster, clusters }: { us
           )}
 
           {category === 'Clusters' && (
-            <div className="kb-card" style={{ padding: 20 }}>
-              <p className="kb-field-label" style={{ marginBottom: 12 }}>Connected clusters</p>
-              {clusters.length === 0 ? (
-                <p className="kb-explanation">No clusters detected via kubeconfig.</p>
-              ) : (
-                clusters.map(c => (
-                  <div key={c} className="kb-toggle-row">
-                    <span>{c}</span>
-                    {c === selectedCluster ? <span className="kb-tag teal">active</span> : <span className="kb-tag">idle</span>}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div className="kb-card" style={{ padding: 20 }}>
+                <p className="kb-field-label" style={{ marginBottom: 12 }}>Connected clusters</p>
+                {clusters.length === 0 ? (
+                  <p className="kb-explanation">No clusters connected yet.</p>
+                ) : (
+                  clusters.map(c => (
+                    <div key={c} className="kb-toggle-row">
+                      <span>{c}</span>
+                      {c === selectedCluster ? <span className="kb-tag teal">active</span> : <span className="kb-tag">idle</span>}
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="kb-card" style={{ padding: 20 }}>
+                <p className="kb-field-label" style={{ marginBottom: 12 }}>Add new cluster</p>
+                
+                {!generatedToken ? (
+                  <form onSubmit={handleAddCluster} style={{ display: 'flex', gap: '10px' }}>
+                    <input 
+                      type="text" 
+                      className="kb-search-input" 
+                      placeholder="e.g. production-eks" 
+                      value={newClusterName}
+                      onChange={e => setNewClusterName(e.target.value)}
+                      required
+                      style={{ flex: 1, padding: '8px 12px', border: '1px solid var(--bd)', background: 'var(--bg)' }}
+                    />
+                    <button type="submit" className="kb-btn" disabled={isAdding || !newClusterName.trim()}>
+                      {isAdding ? 'Generating...' : 'Generate Token'}
+                    </button>
+                  </form>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <div className="kb-explanation" style={{ color: 'var(--green)' }}>✓ Token generated successfully. Run this command to install the agent:</div>
+                    <pre style={{ background: 'var(--bg)', padding: '16px', border: '1px solid var(--green-bd)', color: 'var(--t1)', fontSize: '12px', overflowX: 'auto', lineHeight: '1.6', fontFamily: 'var(--font-jetbrains-mono), monospace' }}>
+{`helm install kubric-agent ./kubric-agent \\
+  -n kubric-system --create-namespace \\
+  --set agent.clusterToken=${generatedToken} \\
+  --set agent.clusterName=${newClusterName} \\
+  --set agent.ingestionEndpoint=https://api.kubric.com/api/v1/ingest`}
+                    </pre>
+                    <button className="kb-btn" style={{ alignSelf: 'flex-start' }} onClick={() => { setGeneratedToken(null); setNewClusterName(''); }}>
+                      Add another cluster
+                    </button>
                   </div>
-                ))
-              )}
+                )}
+              </div>
             </div>
           )}
 
