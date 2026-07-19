@@ -4,7 +4,7 @@ agent:
   token: ""
   image:
     repository: kubric-agent
-    tag: "v3"
+    tag: "v5"
     pullPolicy: IfNotPresent
 
 resources:
