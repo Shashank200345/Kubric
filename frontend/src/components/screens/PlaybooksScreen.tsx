@@ -28,7 +28,7 @@ export default function PlaybooksScreen() {
           <p className="kb-welcome-sub">{PLAYBOOKS.filter(p => p.builtin).length} built-in · {PLAYBOOKS.filter(p => !p.builtin).length} custom</p>
         </div>
         <div className="kb-welcome-actions">
-          <button className="kb-btn primary">+ New playbook</button>
+          <button className="kb-btn primary" disabled title="Custom playbook builder is coming soon">+ New playbook · soon</button>
         </div>
       </div>
 
