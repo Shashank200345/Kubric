@@ -77,25 +77,11 @@ export default function PricingSection() {
         ))}
       </div>
 
-      {/* Scale / enterprise + outcome credit callouts */}
-      <div className="pr-notes">
-        <div className="pr-note">
-          <div className="pr-note-label">Scale · Year 2+</div>
-          <div className="pr-note-title">Custom enterprise</div>
-          <p className="pr-note-body">
-            On-prem / VPC deployment, SOC 2, ISO 27001, SSO, dedicated success engineer. For large teams and IT services firms managing client infrastructure at scale.
-          </p>
-          <a className="pr-note-cta" href="mailto:hello@kubric.dev">
-            Talk to sales <span className="pr-arrow">→</span>
-          </a>
-        </div>
-        <div className="pr-note">
-          <div className="pr-note-label">What's an outcome credit?</div>
-          <div className="pr-note-title">You only pay for value delivered</div>
-          <p className="pr-note-body">
-            A billed credit fires only on real work: one PR risk assessment posted, one incident auto-diagnosed, or one fix auto-applied. Browsing the dashboard, asking Kubric questions, and viewing history are always free and unmetered.
-          </p>
-        </div>
+      {/* Single minimal footnote */}
+      <div className="pr-foot">
+        <p className="pr-foot-text">
+          Need on-prem, SSO, or a dedicated success engineer? <a href="mailto:hello@kubric.dev">Talk to sales →</a>
+        </p>
       </div>
 
       <style>{`
@@ -108,9 +94,8 @@ export default function PricingSection() {
         }
         .pr-card:hover { border-color: rgba(124,255,178,0.35); }
         .pr-card.is-hi {
-          border-color: rgba(124,255,178,0.5);
-          background: linear-gradient(160deg, rgba(124,255,178,0.06), #0b100d 65%);
-          box-shadow: 0 0 0 1px rgba(124,255,178,0.08) inset, 0 30px 60px -30px rgba(124,255,178,0.18);
+          border-color: rgba(124,255,178,0.45);
+          background: #0c130f;
         }
         .pr-badge {
           position: absolute; top: -1px; right: 20px; transform: translateY(-50%);
@@ -141,19 +126,12 @@ export default function PricingSection() {
         .pr-arrow { transition: transform .2s ease; }
         .pr-btn:hover .pr-arrow { transform: translateX(3px); }
 
-        .pr-notes { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 20px; }
-        .pr-note {
-          background: rgba(255,255,255,0.02); border: 0.5px solid rgba(255,255,255,0.08);
-          border-left: 2px solid rgba(124,255,178,0.6);
-          padding: 22px 24px;
-        }
-        .pr-note-label { font-family: var(--font-jetbrains-mono), monospace; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: rgba(255,255,255,0.4); }
-        .pr-note-title { font-size: 16px; font-weight: 600; color: #eef2f5; margin: 8px 0 10px; }
-        .pr-note-body { font-size: 13px; line-height: 1.65; color: rgba(255,255,255,0.55); margin: 0 0 10px; }
-        .pr-note-cta { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: #7cffb2; text-decoration: none; }
-        .pr-note-cta:hover { text-decoration: underline; }
+        .pr-foot { margin-top: 22px; text-align: center; }
+        .pr-foot-text { font-size: 13px; color: rgba(255,255,255,0.45); margin: 0; }
+        .pr-foot-text a { color: #7cffb2; text-decoration: none; font-weight: 500; }
+        .pr-foot-text a:hover { text-decoration: underline; }
 
-        @media (max-width: 900px) { .pr-grid { grid-template-columns: 1fr; } .pr-notes { grid-template-columns: 1fr; } }
+        @media (max-width: 900px) { .pr-grid { grid-template-columns: 1fr; } }
       `}</style>
     </div>
   );
