@@ -6,6 +6,7 @@ from typing import Dict, Tuple
 
 from loguru import logger
 from kubernetes import client, config
+from kubernetes.client.exceptions import ApiException
 from k8s.service import InvestigationService
 
 try:
@@ -14,6 +15,7 @@ except config.ConfigException:
     config.load_kube_config()
 
 v1 = client.CoreV1Api()
+apps_v1 = client.AppsV1Api()
 
 # In-memory store to avoid duplicate incident reports
 # Key:   (namespace, pod_name, reason)
@@ -22,6 +24,7 @@ _incidents: Dict[Tuple[str, str, str], dict] = {}
 
 _CRASH_REASON = "CrashLoopBackOff"
 _OOM_REASON = "OOMKilled"
+_IMAGE_PULL_REASONS = ["ImagePullBackOff", "ErrImagePull"]
 
 BACKEND_INGEST_URL = os.getenv("INGESTION_ENDPOINT", "http://host.minikube.internal:8000/api/v1/ingest")
 CLUSTER_TOKEN = os.getenv("CLUSTER_TOKEN", "default-token")
@@ -47,6 +50,8 @@ def _extract_unhealthy_pods(pods: client.V1PodList) -> set:
                     unhealthy.add((ns, name, _OOM_REASON))
                 else:
                     unhealthy.add((ns, name, _CRASH_REASON))
+            elif waiting_reason in _IMAGE_PULL_REASONS:
+                unhealthy.add((ns, name, "ImagePullBackOff"))
             elif terminated_reason == "Error" and restart_count >= 2:
                 unhealthy.add((ns, name, _CRASH_REASON))
             elif terminated_reason == _OOM_REASON:
@@ -91,8 +96,8 @@ async def _scan_once() -> None:
             
             try:
                 logger.info(f"[agent] Pushing evidence to {BACKEND_INGEST_URL}...")
-                async with httpx.AsyncClient(timeout=60.0) as client:
-                    resp = await client.post(
+                async with httpx.AsyncClient(timeout=60.0) as client_http:
+                    resp = await client_http.post(
                         BACKEND_INGEST_URL,
                         json=payload,
                         headers={"Authorization": f"Bearer {CLUSTER_TOKEN}"}
@@ -101,6 +106,8 @@ async def _scan_once() -> None:
                     logger.info("[agent] Successfully ingested by backend.")
             except Exception as e:
                 logger.error(f"[agent] Failed to push incident to backend: {e}")
+                # Remove from tracking so we retry on the next polling cycle
+                del _incidents[key]
 
     # ── Resolve incidents whose pods are healthy again
     for key, info in _incidents.items():
@@ -112,10 +119,239 @@ async def _scan_once() -> None:
             logger.info(f"[agent] RESOLVED: {pod} pod no longer {reason} in namespace {ns}")
 
 
+# --- Action Handlers ---
+
+def handle_restart_pod(params: dict) -> dict:
+    v1.delete_namespaced_pod(
+        name=params["pod_name"],
+        namespace=params["namespace"]
+    )
+    return {"message": f"Pod '{params['pod_name']}' deleted for restart."}
+
+def handle_rollback_deployment(params: dict) -> dict:
+    # A simple way to trigger a rollout restart or rollback
+    # Often rollback is done via replicaset, but restarting forces a new pod
+    # For a real rollback, we would need to find the previous replicaset.
+    # We will simulate a patch that triggers a rollout (e.g. adding an annotation).
+    body = {
+        "spec": {
+            "template": {
+                "metadata": {
+                    "annotations": {
+                        "kubric.dev/restartedAt": datetime.now(timezone.utc).isoformat()
+                    }
+                }
+            }
+        }
+    }
+    apps_v1.patch_namespaced_deployment(
+        name=params["deployment_name"],
+        namespace=params["namespace"],
+        body=body
+    )
+    return {"message": f"Triggered rollout for deployment '{params['deployment_name']}'."}
+
+def handle_update_resource_limits(params: dict) -> dict:
+    # Build the patch for the specific container
+    containers = []
+    
+    # We need to fetch current deployment to correctly patch one container
+    deployment = apps_v1.read_namespaced_deployment(params["deployment_name"], params["namespace"])
+    for c in deployment.spec.template.spec.containers:
+        if c.name == params["container_name"]:
+            resources = {"limits": {}, "requests": {}}
+            if params.get("memory_limit"):
+                resources["limits"]["memory"] = params["memory_limit"]
+                resources["requests"]["memory"] = params["memory_limit"]
+            if params.get("cpu_limit"):
+                resources["limits"]["cpu"] = params["cpu_limit"]
+                resources["requests"]["cpu"] = params["cpu_limit"]
+            containers.append({
+                "name": c.name,
+                "resources": resources
+            })
+    
+    body = {
+        "spec": {
+            "template": {
+                "spec": {
+                    "containers": containers
+                }
+            }
+        }
+    }
+    apps_v1.patch_namespaced_deployment(
+        name=params["deployment_name"],
+        namespace=params["namespace"],
+        body=body
+    )
+    return {"message": f"Updated resource limits for container '{params['container_name']}' in deployment '{params['deployment_name']}'."}
+
+def handle_scale_deployment(params: dict) -> dict:
+    body = {
+        "spec": {
+            "replicas": params["replicas"]
+        }
+    }
+    apps_v1.patch_namespaced_deployment(
+        name=params["deployment_name"],
+        namespace=params["namespace"],
+        body=body
+    )
+    return {"message": f"Scaled deployment '{params['deployment_name']}' to {params['replicas']} replicas."}
+
+def handle_update_image(params: dict) -> dict:
+    deployment = apps_v1.read_namespaced_deployment(
+        name=params["deployment_name"],
+        namespace=params["namespace"]
+    )
+    containers = []
+    for c in deployment.spec.template.spec.containers:
+        if c.name == params["container_name"]:
+            containers.append({
+                "name": c.name,
+                "image": params["image"]
+            })
+        else:
+            containers.append({
+                "name": c.name,
+                "image": c.image
+            })
+    
+    body = {
+        "spec": {
+            "template": {
+                "spec": {
+                    "containers": containers
+                }
+            }
+        }
+    }
+    apps_v1.patch_namespaced_deployment(
+        name=params["deployment_name"],
+        namespace=params["namespace"],
+        body=body
+    )
+    return {"message": f"Updated image for container '{params['container_name']}' in deployment '{params['deployment_name']}' to '{params['image']}'."}
+
+def handle_update_environment_variable(params: dict) -> dict:
+    deployment = apps_v1.read_namespaced_deployment(
+        name=params["deployment_name"],
+        namespace=params["namespace"]
+    )
+    containers = []
+    for c in deployment.spec.template.spec.containers:
+        if c.name == params["container_name"]:
+            env_vars = c.env or []
+            # Check if env exists
+            found = False
+            for e in env_vars:
+                if e.name == params["env_name"]:
+                    e.value = params["env_value"]
+                    found = True
+                    break
+            if not found:
+                from kubernetes.client.models import V1EnvVar
+                env_vars.append(V1EnvVar(name=params["env_name"], value=params["env_value"]))
+            
+            containers.append({
+                "name": c.name,
+                "env": [e.to_dict() for e in env_vars]
+            })
+        else:
+            containers.append({
+                "name": c.name,
+                "env": [e.to_dict() for e in (c.env or [])]
+            })
+    
+    body = {
+        "spec": {
+            "template": {
+                "spec": {
+                    "containers": containers
+                }
+            }
+        }
+    }
+    apps_v1.patch_namespaced_deployment(
+        name=params["deployment_name"],
+        namespace=params["namespace"],
+        body=body
+    )
+    return {"message": f"Updated environment variable '{params['env_name']}' for container '{params['container_name']}' in deployment '{params['deployment_name']}'."}
+
+ACTION_HANDLERS = {
+    "restart_pod": handle_restart_pod,
+    "rollback_deployment": handle_rollback_deployment,
+    "update_resource_limits": handle_update_resource_limits,
+    "scale_deployment": handle_scale_deployment,
+    "update_image": handle_update_image,
+    "update_environment_variable": handle_update_environment_variable,
+}
+
+async def _fetch_and_execute_actions() -> None:
+    logger.info("[agent] _fetch_and_execute_actions called!")
+    backend_url = BACKEND_INGEST_URL.replace("/ingest", "/actions")
+    pending_url = f"{backend_url}/pending"
+    
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client_http:
+            resp = await client_http.get(
+                pending_url,
+                headers={"Authorization": f"Bearer {CLUSTER_TOKEN}"}
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                actions = data.get("actions", [])
+                for action_obj in actions:
+                    action_id = action_obj.get("id")
+                    action_type = action_obj.get("action_type")
+                    params = action_obj.get("params", {})
+                    
+                    logger.info(f"[agent] Executing pending action {action_id} ({action_type})")
+                    
+                    # Execute
+                    try:
+                        handler = ACTION_HANDLERS.get(action_type)
+                        if not handler:
+                            raise Exception(f"Unknown action_type: {action_type}")
+                            
+                        result_dict = handler(params)
+                        status = "success"
+                        output = result_dict
+                    except ApiException as e:
+                        if e.status == 404:
+                            status = "failed"
+                            output = {"error": f"Resource not found (404) in namespace '{params.get('namespace', 'unknown')}' — it may have already been deleted, renamed, or resolved manually before this action ran."}
+                        elif e.status == 409:
+                            status = "failed"
+                            output = {"error": f"Conflict updating resource (409) — it was modified concurrently. Not applied; consider re-running diagnosis for fresh evidence."}
+                        else:
+                            status = "failed"
+                            output = {"error": f"Kubernetes API error ({e.status}): {e.reason}"}
+                    except Exception as e:
+                        status = "failed"
+                        output = {"error": str(e)}
+                        
+                    # Post result
+                    result_url = f"{backend_url}/{action_id}/result"
+                    await client_http.post(
+                        result_url,
+                        headers={"Authorization": f"Bearer {CLUSTER_TOKEN}"},
+                        json={"status": status, "output": output}
+                    )
+                    logger.info(f"[agent] Action {action_id} finished with status: {status}")
+    except Exception as e:
+        logger.error(f"[agent] Failed to fetch/execute actions: {e}")
+
 async def _poll_loop(interval_s: int) -> None:
+    from pathlib import Path
     logger.info(f"[agent] Polling started every {interval_s}s. Target backend: {BACKEND_INGEST_URL}")
+    Path("/tmp/kubric-heartbeat").touch()
     while True:
         await _scan_once()
+        await _fetch_and_execute_actions()
+        Path("/tmp/kubric-heartbeat").touch()
         await asyncio.sleep(interval_s)
 
 if __name__ == "__main__":
