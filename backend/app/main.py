@@ -193,7 +193,7 @@ async def cli_get_status(cluster: str = "", authorization: Optional[str] = Heade
 
 
 from app.kubernetes.service import InvestigationService
-from app.kubernetes.executor import KubectlExecutor, KubectlError
+from app.kubernetes.executor import KubectlExecutor, KubectlError, ClusterUnreachableError
 from app.ai.agent import KubernetesAIAgent
 from app.insforge_client import InsForgeClient
 from pydantic import BaseModel
@@ -343,6 +343,9 @@ async def get_cluster_metrics(context: Optional[str] = None):
             # Rough heuristic: 110 pods/node is max, scale to percentage
             metrics["network_pct"] = min(95, round((pods_per_node / 110) * 100))
 
+    except ClusterUnreachableError:
+        # Cluster is down — executor already logged a rate-limited warning. Return zeros quietly.
+        pass
     except KubectlError as e:
         logger.error(f"Metrics collection failed: {e}")
         # Return zeros — frontend will show empty meters
@@ -404,35 +407,64 @@ async def get_investigation_progress(investigation_id: str, authorization: Optio
         logger.error(f"Failed to fetch progress for {investigation_id}: {e}")
         return {"progress": []}
 
+def _user_id_from_jwt(authorization: Optional[str]) -> Optional[str]:
+    """Best-effort extraction of the user id (sub claim) from a Bearer JWT."""
+    if not authorization:
+        return None
+    token = authorization.split("Bearer ")[-1].strip()
+    parts = token.split(".")
+    if len(parts) != 3:
+        return None
+    try:
+        import base64
+        import json as _json
+        payload = parts[1]
+        payload += "=" * ((4 - len(payload) % 4) % 4)
+        decoded = base64.b64decode(payload).decode("utf-8")
+        return _json.loads(decoded).get("sub")
+    except Exception:
+        return None
+
+
 @app.post("/investigate")
 async def investigate_cluster(request: InvestigationRequest, authorization: Optional[str] = Header(None)):
-    logger.info(f"Received request to investigate cluster for ID {request.investigation_id} (context: {request.cluster_context}).")
-    
+    logger.info(f"Received request to investigate cluster (context: {request.cluster_context}).")
+
     # Initialize the client with the user's JWT so it passes RLS checks
     client = InsForgeClient(user_jwt=authorization)
-    
+
+    # The frontend sends a short optimistic id (e.g. "inv_ab12cd"). The database
+    # keys investigations/investigation_progress by a real UUID, so we must create
+    # a persistent investigation row here and use its UUID for all DB writes.
+    user_id = _user_id_from_jwt(authorization)
+    real_investigation_id = await client.create_investigation(
+        cluster_context=request.cluster_context, user_id=user_id
+    )
+    # If persistence is unavailable, still run the investigation and return the
+    # diagnosis in the response (progress steps simply won't be persisted).
+    active_id = real_investigation_id or None
+
     try:
         # 1. Collect Evidence
         service = InvestigationService(client=client)
-        investigation_data = await service.run_investigation(request.investigation_id, request.cluster_context)
-        
+        investigation_data = await service.run_investigation(active_id, request.cluster_context)
+
         # 2. AI Reasoning
         ai_agent = KubernetesAIAgent()
         diagnosis = await ai_agent.analyze(investigation_data)
-        
+
         # 3. Save Final Diagnosis
-        await client.complete_investigation(request.investigation_id, diagnosis)
-        
+        if active_id:
+            await client.complete_investigation(active_id, diagnosis)
+
         return {
             "status": "success",
+            "investigation_id": active_id,
             "diagnosis": diagnosis
         }
     except KubectlError as e:
         logger.error(f"Investigation failed due to cluster error: {str(e)}")
-        # Save failure to db if investigation_id exists
-        if request.investigation_id:
-            client = InsForgeClient()
-            # Send a default failure diagnosis
+        if active_id:
             failure_diagnosis = {
                 "root_cause": str(e),
                 "explanation": "The AI Agent could not communicate with the Kubernetes cluster.",
@@ -440,10 +472,11 @@ async def investigate_cluster(request: InvestigationRequest, authorization: Opti
                 "kubectl_command": None,
                 "confidence": 0
             }
-            await client.complete_investigation(request.investigation_id, failure_diagnosis)
-            
+            await client.complete_investigation(active_id, failure_diagnosis)
+
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        logger.error(f"Unexpected investigation error: {e}")
         raise HTTPException(status_code=500, detail="An internal error occurred during the investigation.")
 
 async def process_incident_background(investigation_id: str, evidence: dict):
@@ -477,7 +510,7 @@ async def ingest_incident(request: AgentIngestRequest, background_tasks: Backgro
     client = InsForgeClient()
     
     # 1. Validate the token against the clusters table
-    user_id = await client.validate_cluster_token(cluster_token)
+    user_id, cluster_name = await client.validate_cluster_token(cluster_token)
     if not user_id:
         logger.warning(f"Unauthorized cluster token: {cluster_token}")
         raise HTTPException(status_code=401, detail="Invalid cluster token")
@@ -498,6 +531,152 @@ async def ingest_incident(request: AgentIngestRequest, background_tasks: Backgro
     except Exception as e:
         logger.error(f"Unexpected error during ingestion: {str(e)}")
         raise HTTPException(status_code=500, detail="An internal error occurred during ingestion.")
+
+
+from pydantic import Field
+
+class RestartPodParams(BaseModel):
+    namespace: str
+    pod_name: str
+
+class RollbackDeploymentParams(BaseModel):
+    namespace: str
+    deployment_name: str
+    target_revision: Optional[int] = None
+
+class UpdateResourceLimitsParams(BaseModel):
+    namespace: str
+    deployment_name: str
+    container_name: str
+    memory_limit: Optional[str] = None
+    cpu_limit: Optional[str] = None
+
+class ScaleDeploymentParams(BaseModel):
+    namespace: str
+    deployment_name: str
+    replicas: int = Field(ge=0, le=50)
+
+
+class UpdateEnvironmentVariableParams(BaseModel):
+    namespace: str
+    deployment_name: str
+    container_name: str
+    env_name: str
+    env_value: str
+
+class ActionCreateRequest(BaseModel):
+    investigation_id: str
+    action_type: str
+    params: Dict[str, Any]
+
+@app.post("/api/v1/actions")
+async def create_action(request: ActionCreateRequest, authorization: Optional[str] = Header(None)):
+    """Frontend requests an action execution."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
+    
+    # We validate the params depending on action_type
+    try:
+        if request.action_type == "restart_pod":
+            RestartPodParams(**request.params)
+        elif request.action_type == "rollback_deployment":
+            RollbackDeploymentParams(**request.params)
+        elif request.action_type == "update_resource_limits":
+            UpdateResourceLimitsParams(**request.params)
+        elif request.action_type == "scale_deployment":
+            ScaleDeploymentParams(**request.params)
+        elif request.action_type == "update_environment_variable":
+            UpdateEnvironmentVariableParams(**request.params)
+        else:
+            raise HTTPException(status_code=400, detail="Invalid action_type")
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Invalid parameters: {e}")
+        
+    namespace = request.params.get("namespace", "")
+    blocked_namespaces = ["kube-system", "kube-public", "kube-node-lease"]
+    if namespace in blocked_namespaces:
+        raise HTTPException(status_code=403, detail="Cannot execute actions in system namespaces")
+
+    user_jwt = authorization.split("Bearer ")[1].strip()
+    client = InsForgeClient(user_jwt=f"Bearer {user_jwt}")
+    
+    try:
+        inv_details = await client.get_investigation_details(request.investigation_id)
+        if not inv_details:
+            raise HTTPException(status_code=404, detail="Investigation not found")
+
+        user_id = inv_details.get("user_id")
+        if not user_id:
+            import base64
+            import json
+            parts = user_jwt.split(".")
+            if len(parts) == 3:
+                payload = parts[1]
+                payload += "=" * ((4 - len(payload) % 4) % 4)
+                decoded = base64.b64decode(payload).decode("utf-8")
+                user_id = json.loads(decoded).get("sub")
+
+        if not user_id:
+            raise HTTPException(status_code=400, detail="Could not determine user_id for action")
+
+        action = await client.create_action(
+            request.investigation_id, 
+            request.action_type, 
+            request.params,
+            user_id=user_id,
+            cluster_name=inv_details["cluster_context"]
+        )
+        if not action:
+            raise HTTPException(status_code=500, detail="Failed to create action (no action returned)")
+        return action
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        err_msg = str(e)
+        if hasattr(e, 'response') and hasattr(e.response, 'text'):
+            err_msg = f"{e} - {e.response.text}"
+        raise HTTPException(status_code=500, detail=f"Failed to create action: {err_msg}")
+
+@app.get("/api/v1/actions/pending")
+async def get_pending_actions(authorization: Optional[str] = Header(None)):
+    """Agent polls for pending actions to execute."""
+    with open("agent_hits.log", "a") as f:
+        f.write("Agent hit pending endpoint\n")
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
+        
+    cluster_token = authorization.split("Bearer ")[1].strip()
+    client = InsForgeClient()
+    
+    user_id, cluster_name = await client.validate_cluster_token(cluster_token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid cluster token")
+        
+    actions = await client.get_pending_actions(user_id, cluster_name)
+    return {"actions": actions}
+
+class ActionResultRequest(BaseModel):
+    status: str
+    output: Dict[str, Any]
+
+@app.post("/api/v1/actions/{action_id}/result")
+async def update_action_result(action_id: str, request: ActionResultRequest, authorization: Optional[str] = Header(None)):
+    """Agent posts the execution result of an action."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
+        
+    cluster_token = authorization.split("Bearer ")[1].strip()
+    client = InsForgeClient()
+    
+    user_id, cluster_name = await client.validate_cluster_token(cluster_token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid cluster token")
+        
+    success = await client.update_action_result(action_id, request.status, request.output)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to update action result")
+        
+    return {"status": "success"}
 
 
 # --- Metrics History (in-memory time-series for the chart) ---
@@ -594,6 +773,8 @@ async def get_workloads(context: Optional[str] = None):
         pods_json = KubectlExecutor.run(
             "kubectl get pods -A -o json", parse_json=True, context=context
         )
+    except ClusterUnreachableError:
+        return {"workloads": []}
     except KubectlError as e:
         logger.error(f"Failed to fetch workloads: {e}")
         return {"workloads": []}
@@ -678,11 +859,69 @@ async def get_workloads(context: Optional[str] = None):
     return {"workloads": workloads}
 
 
+@app.get("/pods")
+async def get_pods(context: Optional[str] = None):
+    """Returns a list of all pods with their status and metrics."""
+    try:
+        pods_json = KubectlExecutor.run("kubectl get pods -A -o json", parse_json=True, context=context)
+        items = pods_json.get("items", [])
+        
+        # Try to get live cpu/mem per pod
+        pod_metrics = {}
+        try:
+            top_output = KubectlExecutor.run("kubectl top pods -A --no-headers", parse_json=False, context=context)
+            for line in top_output.strip().split("\n"):
+                parts = line.split()
+                if len(parts) >= 4:
+                    ns, name, cpu, mem = parts[0], parts[1], parts[2], parts[3]
+                    pod_metrics[f"{ns}/{name}"] = {
+                        "cpu": cpu,
+                        "mem": mem,
+                    }
+        except Exception:
+            pass  # metrics-server may not be installed
+
+        result = []
+        for p in items:
+            meta = p.get("metadata", {})
+            status = p.get("status", {})
+            ns = meta.get("namespace", "unknown")
+            name = meta.get("name", "unknown")
+            phase = status.get("phase", "Unknown")
+            
+            restarts = 0
+            for cs in status.get("containerStatuses", []):
+                restarts += cs.get("restartCount", 0)
+
+            key = f"{ns}/{name}"
+            cpu = pod_metrics.get(key, {}).get("cpu", "-")
+            mem = pod_metrics.get(key, {}).get("mem", "-")
+
+            result.append({
+                "namespace": ns,
+                "name": name,
+                "status": phase,
+                "restarts": restarts,
+                "cpu": cpu,
+                "memory": mem,
+                "created_at": meta.get("creationTimestamp")
+            })
+            
+        return {"pods": result}
+    except ClusterUnreachableError:
+        return {"pods": []}
+    except Exception as e:
+        logger.error(f"Failed to fetch pods: {e}")
+        return {"pods": []}
+
+
 @app.get("/nodes")
 async def get_nodes(context: Optional[str] = None):
     """Returns real node-level status and resource usage."""
     try:
         nodes_json = KubectlExecutor.run("kubectl get nodes -o json", parse_json=True, context=context)
+    except ClusterUnreachableError:
+        return {"nodes": []}
     except KubectlError as e:
         logger.error(f"Failed to fetch nodes: {e}")
         return {"nodes": []}
@@ -733,6 +972,8 @@ async def get_events(context: Optional[str] = None, limit: int = 30):
     """Returns recent real Kubernetes events across all namespaces."""
     try:
         events_json = KubectlExecutor.run("kubectl get events -A -o json", parse_json=True, context=context)
+    except ClusterUnreachableError:
+        return {"events": []}
     except KubectlError as e:
         logger.error(f"Failed to fetch events: {e}")
         return {"events": []}
