@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import "./landing.css";
 import { Header } from "@/components/ui/header-2";
 import ArchitectureFlow from "@/components/ArchitectureFlow";
-import InteractiveTerminal from "@/components/InteractiveTerminal";
+import DashboardShowcase from "@/components/DashboardShowcase";
+import FailureModesBento from "@/components/FailureModesBento";
 import EcosystemFlow from "@/components/EcosystemFlow";
 import ResolutionShowcase from "@/components/ResolutionShowcase";
 import ScrollFX from "@/components/ScrollFX";
@@ -24,7 +25,7 @@ export default function LandingPage() {
 
       {/* HERO */}
       <section className="hero">
-        <video className="hero-video-bg" src="/hero-background.mp4" autoPlay loop muted playsInline />
+
         <div className="container hero-inner">
           <div className="eyebrow">
             <span className="dot"></span> Now in public beta — free for clusters
@@ -63,10 +64,11 @@ export default function LandingPage() {
 
         </div>
 
-        {/* Terminal mock — interactive */}
-        <div className="container">
-          <InteractiveTerminal />
+        {/* Product dashboard showcase — fades into the page at the bottom */}
+        <div className="container" style={{ marginTop: "24px" }}>
+          <DashboardShowcase />
         </div>
+
       </section>
 
       {/* HOW IT WORKS — interactive investigation flow */}
@@ -212,73 +214,14 @@ export default function LandingPage() {
       <section className="section" id="solutions">
         <div className="container">
           <div className="pods-head">
-            <span className="pods-head-label"><span className="sq" /> Workloads</span>
+            <span className="pods-head-label"><span className="sq" /> Capabilities</span>
             <span className="pods-head-line" />
-            <span className="pods-head-count">3 modes</span>
+            <span className="pods-head-count">6 modes</span>
           </div>
           <h2 className="pods-title">
             Resolve any <em>failure mode.</em>
           </h2>
-          <div className="steps-grid">
-            {[
-              {
-                idx: "01",
-                label: "Memory & restarts",
-                desc: "Identify the offending deploy, the failing container, and the resource ceiling — with a one-click patch.",
-                meta: [
-                  { k: "Signal", v: "OOMKilled · CrashLoop" },
-                  { k: "Detects", v: "Memory ceiling" },
-                  { k: "Fix", v: "One-click patch" },
-                ],
-                cmd: "$ kubric diagnose --oom",
-              },
-              {
-                idx: "02",
-                label: "Pre-deploy PR risk",
-                desc: "Catch it in the PR, not in prod. Kubric cross-references the diff against live P95 usage and flags resource limits that will break before the merge button is even clickable.",
-                meta: [
-                  { k: "Signal", v: "PR diff · resource limits" },
-                  { k: "Detects", v: "Limit below P95 usage" },
-                  { k: "Fix", v: "Risk comment on PR" },
-                ],
-                cmd: "$ kubric review --pr 247",
-              },
-              {
-                idx: "03",
-                label: "Config drift & missing probes",
-                desc: "Spot what silently changed. Kubric detects liveness/readiness probes removed in refactors and replica counts dropped during cleanup PRs — before they ship.",
-                meta: [
-                  { k: "Signal", v: "Probe removed · replica cut" },
-                  { k: "Detects", v: "Liveness/readiness gaps" },
-                  { k: "Fix", v: "Flags before merge" },
-                ],
-                cmd: "$ kubric diff --deploy payment-service",
-                accent: true,
-              },
-            ].map((step) => (
-              <div className="step-card" key={step.idx}>
-                <div className="step-top">
-                  <span className={`step-num ${step.accent ? "accent" : ""}`}>
-                    {step.idx}
-                  </span>
-                  <span className="step-label">{step.label}</span>
-                </div>
-                <p className="step-desc">{step.desc}</p>
-                <div className="step-meta">
-                  {step.meta.map((m) => (
-                    <div className="step-row" key={m.k}>
-                      <span className="k">{m.k}</span>
-                      <span className="v">{m.v}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="step-cmd">
-                  <span className="dollar">$</span>
-                  {step.cmd.replace(/^\$\s*/, "")}
-                </div>
-              </div>
-            ))}
-          </div>
+          <FailureModesBento />
         </div>
       </section>
 
@@ -430,27 +373,13 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* GET STARTED — animated hub */}
-      <section className="section dim" id="get-started">
-        <div className="container">
-          <div className="kicker" style={{ textAlign: 'center' }}>Onboarding</div>
-          <h2 className="section-title" style={{ textAlign: 'center', marginLeft: 'auto', marginRight: 'auto', marginBottom: '10px' }}>
-            Get started in <em style={{ fontStyle: 'italic', color: '#7cffb2' }}>minutes.</em>
-          </h2>
-          <p className="muted" style={{ textAlign: 'center', maxWidth: '560px', margin: '0 auto 40px', fontSize: '16px' }}>
-            Connect your cluster, let Kubric investigate, and ship the fix — no rip‑and‑replace, no 3 AM stand‑ups.
-          </p>
-          <GetStartedFlow />
-        </div>
-      </section>
-
       {/* CTA — video left, content right (dark blend) */}
       <section className="cta-video">
         <div className="container cta-grid">
           <div className="cta-video-wrap">
             <video
               className="cta-video-el"
-              src="/kubric-logo.mp4"
+              src="/kubric-logo-transform.mp4"
               autoPlay
               loop
               muted
@@ -476,9 +405,10 @@ export default function LandingPage() {
       {/* FOOTER */}
       <footer className="footer">
         <div className="container foot-grid">
-          <div>
+          <div className="foot-brand">
             <div className="brand">
-              <img src="/kubric-logo.png" alt="Kubric" style={{ height: '56px', width: 'auto' }} />
+              <img src="/kubric-logo.png" alt="Kubric" style={{ height: '48px', width: 'auto' }} />
+              <span className="foot-brand-name"><span className="k">K</span>UBRIC</span>
             </div>
             <p className="muted small">The autonomous SRE for Kubernetes.</p>
           </div>
@@ -490,23 +420,24 @@ export default function LandingPage() {
             <a href="#how-it-works">How it works</a>
           </div>
           <div>
-            <h6>Resources</h6>
-            <a href="#">Docs</a>
-            <a href="#">Blog</a>
-            <a href="#">Examples</a>
-            <a href="#">Status</a>
-          </div>
-          <div>
             <h6>Company</h6>
             <a href="#">About</a>
-            <a href="#">Careers</a>
             <a href="#">Security</a>
             <a href="#">Contact</a>
           </div>
         </div>
+
         <div className="container foot-bottom">
-          <span>© 2026 Kubric Labs, Inc.</span>
-          <span>Made for platform teams.</span>
+          <span>© 2026 Kubric Labs, Inc. All rights reserved.</span>
+          <div className="foot-social">
+            <a href="#">Twitter</a>
+            <a href="#">LinkedIn</a>
+          </div>
+        </div>
+
+        {/* giant low-opacity brand wordmark */}
+        <div className="foot-watermark" aria-hidden="true">
+          <span className="k">K</span>UBRIC
         </div>
       </footer>
     </div>
