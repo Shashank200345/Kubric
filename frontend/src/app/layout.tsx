@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { JetBrains_Mono, Inter } from "next/font/google";
+import { JetBrains_Mono, Inter, Lexend } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
 
@@ -31,6 +31,14 @@ const inter = Inter({
   display: "swap",
 });
 
+const lexend = Lexend({
+  variable: "--font-lexend",
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  display: "swap",
+});
+
+
 export const metadata: Metadata = {
   title: "Kubric — AI-Powered Kubernetes Troubleshooting",
   description:
@@ -45,12 +53,18 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${thicccboi.variable} ${jetbrainsMono.variable} ${inter.variable} h-full antialiased`}
+      className={`${thicccboi.variable} ${jetbrainsMono.variable} ${inter.variable} ${lexend.variable} h-full antialiased`}
     >
       <head>
         <link
           rel="stylesheet"
           href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.31.0/dist/tabler-icons.min.css"
+        />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap"
         />
       </head>
       <body className="min-h-full flex flex-col">{children}</body>
