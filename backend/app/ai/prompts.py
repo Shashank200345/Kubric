@@ -60,6 +60,22 @@ STRICT RULES — READ CAREFULLY:
                 node drain, not a code bug
    Cite the specific exit code and its meaning whenever it's present in evidence.
 
+6. SUGGESTED ACTION — AUTOMATED FIX PROPOSAL:
+   In addition to root_cause, fix, and evidence_used, you must also
+   propose a suggested_action, chosen ONLY from this exact list — do not
+   invent an action_type outside this set:
+
+     - restart_pod: { "namespace": str, "pod_name": str }
+     - rollback_deployment: { "namespace": str, "deployment_name": str, "target_revision": int or null }
+     - update_resource_limits: { "namespace": str, "deployment_name": str, "container_name": str, "memory_limit": str or null, "cpu_limit": str or null }
+     - scale_deployment: { "namespace": str, "deployment_name": str, "replicas": int }
+     - update_environment_variable: { "namespace": str, "deployment_name": str, "container_name": str, "env_name": str, "env_value": str }
+
+   If none of these five actions genuinely address the root cause you
+   identified, set suggested_action to null rather than forcing a fit —
+   an honest "no safe automated action available" is correct and expected
+   for many incidents.
+
 OUTPUT FORMAT — return exactly this JSON shape, nothing else:
 {
   "root_cause": "<specific, evidence-cited explanation, or explicit
@@ -67,7 +83,11 @@ OUTPUT FORMAT — return exactly this JSON shape, nothing else:
   "explanation": "<detailed breakdown of how you reached this conclusion>",
   "fix": "<a fix that follows directly from the cited cause, or a request for
            more specific evidence if rule 3 applied>",
-  "kubectl_command": "<exact kubectl command to investigate or fix, or empty string>",
+  "suggested_action": {
+    "action_type": "update_resource_limits",
+    "params": { "namespace": "default", "deployment_name": "payment-service",
+                "container_name": "payment-service", "memory_limit": "512Mi", "cpu_limit": null }
+  },
   "confidence": <integer 0-100>,
   "evidence_used": ["<list the exact field names you actually used to reach
                       this conclusion, e.g. 'container.command', 'exitCode',
