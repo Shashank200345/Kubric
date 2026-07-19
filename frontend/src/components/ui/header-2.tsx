@@ -48,8 +48,23 @@ export function Header() {
 				)}
 			>
 				<div className="flex flex-1 items-center justify-start">
-					<Link className="brand" href="/" style={{ textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center' }}>
-						<img src="/kubric-logo.png" alt="Kubric" style={{ height: '70px', width: 'auto' }} />
+					<Link className="brand" href="/" aria-label="Kubric" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '2px' }}>
+						<img src="/kubric-logo.png" alt="" style={{ height: '64px', width: 'auto', display: 'block', flexShrink: 0, transform: 'translateY(4px)' }} />
+						<span
+							style={{
+								fontFamily: "'Fredoka', system-ui, sans-serif",
+								fontWeight: 600,
+								fontSize: '28px',
+								lineHeight: 1,
+								letterSpacing: '0.12em',
+								display: 'inline-flex',
+								alignItems: 'center',
+								transform: 'translateY(-1px)',
+							}}
+						>
+							<span style={{ color: '#7cffb2' }}>K</span>
+							<span style={{ color: '#f4f7f9' }}>UBRIC</span>
+						</span>
 					</Link>
 				</div>
 				
