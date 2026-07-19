@@ -1,6 +1,19 @@
 import os
+import uuid
 import httpx
 from loguru import logger
+
+
+def _is_uuid(value) -> bool:
+    """Return True if value is a valid UUID string (the DB keys rows by UUID)."""
+    if not value or not isinstance(value, str):
+        return False
+    try:
+        uuid.UUID(value)
+        return True
+    except (ValueError, AttributeError, TypeError):
+        return False
+
 
 class InsForgeClient:
     """Client for interacting with InsForge REST API from the backend."""
@@ -28,7 +41,14 @@ class InsForgeClient:
         """
         if not self.url:
             return
-            
+
+        # session_id is a UUID FK to investigations(id). A non-UUID id (e.g. an
+        # optimistic "inv_..." from the client) can never match, so skip the write
+        # instead of generating a 400 on every progress step.
+        if not _is_uuid(investigation_id):
+            logger.debug(f"Skipping progress step — '{investigation_id}' is not a persisted investigation id.")
+            return
+
         async with httpx.AsyncClient() as client:
             try:
                 payload = {
@@ -59,31 +79,38 @@ class InsForgeClient:
                 resp.raise_for_status()
                 logger.info(f"Progress step inserted for {investigation_id}: '{step}'")
             except Exception as e:
-                logger.error(f"Failed to insert progress step for {investigation_id}: {e}")
+                detail = ""
+                if hasattr(e, "response") and getattr(e, "response", None) is not None:
+                    detail = f" — {e.response.text}"
+                logger.error(f"Failed to insert progress step for {investigation_id}: {e}{detail}")
 
-    async def get_investigation_user(self, investigation_id: str) -> str | None:
-        """Fetch the user_id from the investigations table for a given investigation."""
+    async def get_investigation_details(self, investigation_id: str) -> dict | None:
+        """Fetch the user_id and cluster_context from the investigations table for a given investigation."""
         if not self.url:
             return None
         async with httpx.AsyncClient() as client:
             try:
                 resp = await client.get(
-                    f"{self.base_url}/investigations?id=eq.{investigation_id}&select=user_id",
+                    f"{self.base_url}/investigations?id=eq.{investigation_id}&select=user_id,cluster_context",
                     headers=self.headers,
                 )
                 resp.raise_for_status()
                 data = resp.json()
                 if data:
-                    return data[0].get("user_id")
+                    return data[0]
             except Exception as e:
-                logger.error(f"Failed to fetch user_id for {investigation_id}: {e}")
+                logger.error(f"Failed to fetch details for {investigation_id}: {e}")
         return None
 
     async def complete_investigation(self, investigation_id: str, diagnosis: dict):
         """Mark investigation as complete and save the diagnosis."""
         if not self.url:
             return
-            
+
+        if not _is_uuid(investigation_id):
+            logger.debug(f"Skipping completion — '{investigation_id}' is not a persisted investigation id.")
+            return
+
         async with httpx.AsyncClient() as client:
             try:
                 payload = {
@@ -92,7 +119,9 @@ class InsForgeClient:
                     "explanation": diagnosis.get("explanation"),
                     "fix": diagnosis.get("suggested_fix") or diagnosis.get("fix"),
                     "kubectl_command": diagnosis.get("kubectl_command"),
-                    "confidence": diagnosis.get("confidence")
+                    "suggested_action": diagnosis.get("suggested_action"),
+                    "confidence": diagnosis.get("confidence"),
+                    "evidence_used": diagnosis.get("evidence_used")
                 }
                 
                 patch_resp = await client.patch(
@@ -105,23 +134,105 @@ class InsForgeClient:
             except Exception as e:
                 logger.error(f"Failed to complete investigation {investigation_id}: {e}")
 
-    async def validate_cluster_token(self, cluster_token: str) -> str | None:
-        """Validates a cluster_token against the clusters table and returns the associated user_id."""
+    async def validate_cluster_token(self, cluster_token: str) -> tuple[str | None, str | None]:
+        """Validates a cluster_token against the clusters table and returns (user_id, cluster_name)."""
         if not self.url:
-            return None
+            return None, None
         async with httpx.AsyncClient() as client:
             try:
                 resp = await client.get(
-                    f"{self.base_url}/clusters?cluster_token=eq.{cluster_token}&select=user_id",
+                    f"{self.base_url}/clusters?cluster_token=eq.{cluster_token}&select=user_id,cluster_name",
                     headers=self.headers,
                 )
                 resp.raise_for_status()
                 data = resp.json()
                 if data and len(data) > 0:
-                    return data[0].get("user_id")
+                    return data[0].get("user_id"), data[0].get("cluster_name")
             except Exception as e:
                 logger.error(f"Failed to validate cluster token: {e}")
-        return None
+        return None, None
+
+    async def create_action(self, investigation_id: str, action_type: str, params: dict, user_id: str, cluster_name: str) -> dict | None:
+        """Create a new action."""
+        if not self.url:
+            return None
+        async with httpx.AsyncClient() as client:
+            try:
+                headers = {**self.headers, "Prefer": "return=representation"}
+                payload = [{
+                    "investigation_id": investigation_id,
+                    "action_type": action_type,
+                    "params": params,
+                    "status": "pending",
+                    "user_id": user_id,
+                    "cluster_name": cluster_name
+                }]
+                logger.info(f"create_action payload: {payload}")
+                resp = await client.post(
+                    f"{self.base_url}/actions",
+                    headers=headers,
+                    json=payload
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                return data[0] if data else None
+            except Exception as e:
+                err_text = ""
+                if hasattr(e, "response") and hasattr(e.response, "text"):
+                    err_text = e.response.text
+                logger.error(f"Failed to create action. Payload: {payload}, Exception: {e}, Response Text: {err_text}")
+                raise e
+
+    async def get_pending_actions(self, user_id: str, cluster_name: str) -> list[dict]:
+        """Fetch pending actions and mark them as in_progress."""
+        if not self.url:
+            return []
+        async with httpx.AsyncClient() as client:
+            try:
+                # 1. Fetch pending actions
+                resp = await client.get(
+                    f"{self.base_url}/actions?user_id=eq.{user_id}&status=eq.pending&select=*",
+                    headers=self.headers,
+                )
+                resp.raise_for_status()
+                actions = resp.json()
+                
+                # 2. Update their status to in_progress to avoid race conditions
+                if actions:
+                    action_ids = [action['id'] for action in actions]
+                    ids_str = ",".join(action_ids)
+                    await client.patch(
+                        f"{self.base_url}/actions?id=in.({ids_str})",
+                        headers=self.headers,
+                        json={"status": "in_progress"}
+                    )
+                
+                return actions
+            except Exception as e:
+                logger.error(f"Failed to fetch pending actions: {e}")
+                return []
+
+    async def update_action_result(self, action_id: str, status: str, output: dict) -> bool:
+        """Update the status and output of an action."""
+        if not self.url:
+            return False
+        async with httpx.AsyncClient() as client:
+            try:
+                payload = {
+                    "status": status,
+                    "output": output
+                }
+                # Update by ID regardless of previous status
+                resp = await client.patch(
+                    f"{self.base_url}/actions?id=eq.{action_id}",
+                    headers=self.headers,
+                    json=payload
+                )
+                resp.raise_for_status()
+                return True
+            except Exception as e:
+                logger.error(f"Failed to update action result: {e}")
+                return False
 
     async def create_investigation(self, cluster_context: str, user_id: str = None) -> str | None:
         """Create a new investigation record from a push agent."""
