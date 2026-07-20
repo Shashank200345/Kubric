@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { API_BASE } from '@/lib/api';
+import { API_BASE, apiFetch } from '@/lib/api';
 
 interface ClusterEvent {
   type: string;
@@ -142,8 +142,8 @@ export default function IncidentsScreen({ selectedCluster }: { selectedCluster: 
     const ctx = selectedCluster ? `?context=${encodeURIComponent(selectedCluster)}` : '';
     try {
       const [evRes, wlRes] = await Promise.all([
-        fetch(`${API_BASE}/events${ctx}${ctx ? '&' : '?'}limit=60`),
-        fetch(`${API_BASE}/workloads${ctx}`),
+        apiFetch(`/events${ctx}${ctx ? '&' : '?'}limit=60`),
+        apiFetch(`/workloads${ctx}`),
       ]);
       if (!evRes.ok || !wlRes.ok) { setReachable(false); setLoading(false); return; }
       const evData = await evRes.json();
