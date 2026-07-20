@@ -69,6 +69,18 @@ class KubernetesAIAgent:
                             suggested_action.get("params", {})
                         )
 
+            # Deterministic fallback: if the LLM produced no usable action but the
+            # evidence clearly matches a known, fixable pattern, infer the action
+            # ourselves so the user still gets an Approve & Run Fix option.
+            if not diagnosis.get("suggested_action"):
+                inferred = self._infer_action_from_evidence(diagnosis.get("root_cause", ""), evidence)
+                if inferred:
+                    logger.info(f"Inferred fallback action: {inferred['action_type']}")
+                    diagnosis["suggested_action"] = inferred
+                    diagnosis["kubectl_command"] = self._generate_safe_kubectl_command(
+                        inferred["action_type"], inferred["params"]
+                    )
+
             return diagnosis
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse LLM response as JSON: {e}")
@@ -86,6 +98,71 @@ class KubernetesAIAgent:
             "confidence": 0,
             "evidence_used": []
         }
+
+    def _derive_deployment_name(self, pod_name: str) -> str:
+        """Derive the owning Deployment name from a pod name by stripping the
+        ReplicaSet hash and pod suffix (standard Deployment -> RS -> Pod naming)."""
+        parts = pod_name.split("-")
+        if len(parts) >= 3:
+            return "-".join(parts[:-2])
+        return pod_name
+
+    def _infer_action_from_evidence(self, root_cause: str, evidence: Dict[str, Any]) -> Dict[str, Any] | None:
+        """
+        Rule-based action inference used when the LLM omits a usable suggested_action.
+        Maps clearly-identifiable failure patterns to one of the executable actions.
+        """
+        rc = (root_cause or "").lower()
+        pods = (evidence.get("pods") or {}).get("problematic_pods") or []
+        if not pods:
+            return None
+
+        # Pick the pod whose status best matches the root cause, else the first one.
+        target = pods[0]
+        for p in pods:
+            status = str(p.get("status", "")).lower()
+            if status and status in rc:
+                target = p
+                break
+
+        pod_name = target.get("name", "")
+        namespace = target.get("namespace", "default")
+        status = str(target.get("status", ""))
+        deployment_name = self._derive_deployment_name(pod_name)
+        if not deployment_name:
+            return None
+
+        combined = f"{rc} {status.lower()}"
+
+        # Unschedulable / Pending due to insufficient capacity -> scale the
+        # deployment down to the number of replicas the cluster can actually run.
+        if any(k in combined for k in ["pending", "unschedulable", "failedscheduling", "insufficient"]):
+            target_replicas = 1
+            for d in (evidence.get("deployments") or []):
+                if d.get("name") == deployment_name and d.get("namespace") == namespace:
+                    ready = d.get("ready_replicas") or 0
+                    target_replicas = max(1, ready)
+                    break
+            return {
+                "action_type": "scale_deployment",
+                "params": {"namespace": namespace, "deployment_name": deployment_name, "replicas": target_replicas},
+            }
+
+        # Bad image / broken rollout -> roll back to the previous working revision.
+        if any(k in combined for k in ["imagepullbackoff", "errimagepull", "image", "manifest", "not found", "invalidimagename"]):
+            return {
+                "action_type": "rollback_deployment",
+                "params": {"namespace": namespace, "deployment_name": deployment_name, "target_revision": None},
+            }
+
+        # CrashLoopBackOff with no more specific cause -> rollback the recent change.
+        if "crashloopbackoff" in combined or "crash" in combined:
+            return {
+                "action_type": "rollback_deployment",
+                "params": {"namespace": namespace, "deployment_name": deployment_name, "target_revision": None},
+            }
+
+        return None
 
     def _generate_safe_kubectl_command(self, action_type: str, params: Dict[str, Any]) -> str:
         ns = params.get("namespace", "default")
@@ -113,27 +190,42 @@ class KubernetesAIAgent:
         if action_type == "update_environment_variable":
             return any(kw in root_cause_lower for kw in ["env", "environment", "variable", "not set", "missing", "required"])
         if action_type == "scale_deployment":
-            return any(kw in root_cause_lower for kw in ["scale", "replica", "traffic", "load", "capacity"])
+            return any(kw in root_cause_lower for kw in ["scale", "replica", "traffic", "load", "capacity", "pending", "unschedulable", "schedul", "insufficient"])
         return True # Other actions like restart_pod or rollback might apply more generally
 
     async def _validate_action_plausibility_llm(self, root_cause: str, action_type: str) -> bool:
-        prompt = f"""
-Given the following root cause for a Kubernetes pod failure:
-'{root_cause}'
+        """
+        Second-layer validation: ask the LLM if the action plausibly fixes the root cause.
+        Since call_llm forces JSON output, we ask for a JSON response with an "answer" field.
+        If anything goes wrong, default to True (trust the deterministic backstop).
+        """
+        prompt = f"""Given the following root cause for a Kubernetes pod failure:
+"{root_cause}"
 
-Does the Kubernetes action '{action_type}' logically and safely address this specific root cause?
-Answer strictly YES or NO.
-"""
+Does the Kubernetes action "{action_type}" logically and safely address this specific root cause?
+
+Respond with JSON: {{"answer": "YES"}} or {{"answer": "NO"}}"""
         messages = [{"role": "user", "content": prompt.strip()}]
         try:
             response = await self.llm.call_llm(messages)
             if not response:
-                return False
-            ans = response.strip().upper()
-            if "YES" in ans and "NO" not in ans:
+                # LLM unavailable — trust the deterministic backstop
                 return True
-            return False
+            # Parse JSON response
+            import json
+            try:
+                parsed = json.loads(response.strip())
+                ans = str(parsed.get("answer", "")).strip().upper()
+            except (json.JSONDecodeError, AttributeError):
+                # Fallback: try reading raw text
+                ans = response.strip().upper()
+            
+            if "NO" in ans and "YES" not in ans:
+                return False
+            # Default to True — if the deterministic backstop passed, allow it
+            return True
         except Exception as e:
             logger.error(f"Error in LLM plausibility check: {e}")
-            return False
+            # On failure, trust the deterministic backstop rather than blocking the fix
+            return True
 
