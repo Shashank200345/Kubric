@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { API_BASE } from '@/lib/api';
+import { API_BASE, apiFetch } from '@/lib/api';
 import { insforge } from '@/lib/insforge';
 interface Workload {
   name: string;
@@ -129,7 +129,7 @@ export default function WorkloadsScreen({ selectedCluster }: { selectedCluster: 
     const poll = async () => {
       const context = selectedCluster ? `?context=${encodeURIComponent(selectedCluster)}` : '';
       try {
-        const res = await fetch(`${API_BASE}/workloads${context}`);
+        const res = await apiFetch(`/workloads${context}`);
         if (!res.ok) throw new Error(`Request failed with ${res.status}`);
         if (active) {
           const data = await res.json();
