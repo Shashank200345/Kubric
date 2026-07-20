@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unfixable-bug-demo
+  namespace: test-agent-scenarios
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: unfixable-bug
+  template:
+    metadata:
+      labels:
+        app: unfixable-bug
+    spec:
+      containers:
+      - name: bug-container
+        image: python:3.9-slim
+        command: ["python", "-c"]
+        args: ["import time; print('Starting application...'); time.sleep(1); print(1/0)"]
