@@ -1,0 +1,208 @@
+# =============================================================================
+# Kubric Auto-Fix Test Scenarios
+# -----------------------------------------------------------------------------
+# One deployment per action the agent can apply via "Approve & Run Fix".
+# All resources live in the `kubric-fix-tests` namespace so cleanup is a
+# single `kubectl delete ns kubric-fix-tests`.
+#
+# Apply:   kubectl apply -f autofix-scenarios.yaml
+# Cleanup: kubectl delete ns kubric-fix-tests
+#
+# Fixable action coverage:
+#   1. update_resource_limits      (OOMKilled)            — deterministic
+#   2. update_environment_variable (missing required env) — deterministic
+#   3. rollback_deployment         (bad image rollout)    — needs 2-step (see below)
+#   4. restart_pod                 (stuck / wedged pod)   — LLM-judged
+#   5. scale_deployment            (under-capacity)       — LLM-judged / prompt
+# =============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kubric-fix-tests
+---
+# -----------------------------------------------------------------------------
+# 1) OOMKilled  ->  update_resource_limits
+# The container requests 150Mi but is capped at 50Mi, so the kernel OOM-kills
+# it repeatedly. Expected fix: raise the memory limit on container `app`.
+# -----------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oom-autofix
+  namespace: kubric-fix-tests
+  labels:
+    app: oom-autofix
+    kubric-test: update_resource_limits
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: oom-autofix
+  template:
+    metadata:
+      labels:
+        app: oom-autofix
+    spec:
+      containers:
+        - name: app
+          image: polinux/stress
+          command: ["stress"]
+          args: ["--vm", "1", "--vm-bytes", "150M", "--vm-hang", "1"]
+          resources:
+            requests:
+              memory: "50Mi"
+            limits:
+              memory: "50Mi"   # too low on purpose -> OOMKilled
+---
+# -----------------------------------------------------------------------------
+# 2) Missing required env var  ->  update_environment_variable
+# The container exits 1 when REQUIRED_VAR is unset (CrashLoopBackOff).
+# Expected fix: set env REQUIRED_VAR on container `app` to any non-empty value.
+# -----------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: missing-env-autofix
+  namespace: kubric-fix-tests
+  labels:
+    app: missing-env-autofix
+    kubric-test: update_environment_variable
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: missing-env-autofix
+  template:
+    metadata:
+      labels:
+        app: missing-env-autofix
+    spec:
+      containers:
+        - name: app
+          image: busybox:1.36
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              if [ -z "$REQUIRED_VAR" ]; then
+                echo "FATAL: REQUIRED_VAR environment variable is not set. Exiting." >&2
+                exit 1
+              fi
+              echo "REQUIRED_VAR is set to '$REQUIRED_VAR' - running."
+              sleep 3600
+          # REQUIRED_VAR intentionally omitted.
+---
+# -----------------------------------------------------------------------------
+# 3) Bad image rollout  ->  rollback_deployment
+# This baseline is HEALTHY (nginx:1.27-alpine). To create a rollback scenario
+# with real revision history, apply this file first, then break the rollout:
+#
+#   kubectl -n kubric-fix-tests set image deployment/rollback-autofix \
+#     app=nginx:this-tag-does-not-exist-9999
+#
+# The new ReplicaSet fails with ImagePullBackOff while revision 1 stays good.
+# Expected fix: rollback_deployment (undo to the previous working revision).
+# -----------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rollback-autofix
+  namespace: kubric-fix-tests
+  labels:
+    app: rollback-autofix
+    kubric-test: rollback_deployment
+  annotations:
+    kubernetes.io/change-cause: "revision 1 - known good"
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app: rollback-autofix
+  template:
+    metadata:
+      labels:
+        app: rollback-autofix
+    spec:
+      containers:
+        - name: app
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 80
+---
+# -----------------------------------------------------------------------------
+# 4) Stuck / wedged pod  ->  restart_pod
+# The container becomes permanently unready after ~30s (its readiness probe
+# starts failing) but never exits, so Kubernetes will NOT restart it on its
+# own. A pod restart clears the wedged state.
+# Expected fix: restart_pod for the wedged pod.
+# -----------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stuck-pod-autofix
+  namespace: kubric-fix-tests
+  labels:
+    app: stuck-pod-autofix
+    kubric-test: restart_pod
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stuck-pod-autofix
+  template:
+    metadata:
+      labels:
+        app: stuck-pod-autofix
+    spec:
+      containers:
+        - name: app
+          image: busybox:1.36
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "healthy" > /tmp/ready
+              # After 30s the readiness marker disappears and the pod goes
+              # NotReady, but the process keeps running (no crash -> no auto-restart).
+              (sleep 30; rm -f /tmp/ready) &
+              tail -f /dev/null
+          readinessProbe:
+            exec:
+              command: ["cat", "/tmp/ready"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 2
+---
+# -----------------------------------------------------------------------------
+# 5) Over-provisioned replicas  ->  scale_deployment
+# Asks for 10 replicas at 500m CPU each. A typical minikube/kind node cannot fit
+# them all, so several pods stay Pending (FailedScheduling: Insufficient cpu).
+# The scan detects the Pending pods.
+# Expected fix: scale_deployment (scale DOWN to the number that fits).
+# -----------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scale-autofix
+  namespace: kubric-fix-tests
+  labels:
+    app: scale-autofix
+    kubric-test: scale_deployment
+spec:
+  replicas: 10
+  selector:
+    matchLabels:
+      app: scale-autofix
+  template:
+    metadata:
+      labels:
+        app: scale-autofix
+    spec:
+      containers:
+        - name: app
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: "1"
+              memory: "2Gi"
