@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { insforge } from '@/lib/insforge';
-import { API_BASE } from '@/lib/api';
+import { API_BASE, apiFetch } from '@/lib/api';
 import CommandPalette from '@/components/CommandPalette';
 import IncidentsScreen from '@/components/screens/IncidentsScreen';
 import PRRiskScreen from '@/components/screens/PRRiskScreen';
@@ -12,6 +12,10 @@ import NodesScreen from '@/components/screens/NodesScreen';
 import AskKubricScreen from '@/components/screens/AskKubricScreen';
 import PlaybooksScreen from '@/components/screens/PlaybooksScreen';
 import SettingsScreen from '@/components/screens/SettingsScreen';
+import IncidentDeepDive from '@/components/IncidentDeepDive';
+import { OnboardingWizard } from '@/components/onboarding/OnboardingWizard';
+import { EmptyState } from '@/components/onboarding/EmptyState';
+import { fetchOnboardingState } from '@/components/onboarding/api';
 
 interface ProgressStep {
   id: string;
@@ -24,6 +28,13 @@ interface ProgressStep {
 interface SuggestedAction {
   action_type: string;
   params: Record<string, unknown>;
+}
+
+interface AffectedResource {
+  kind?: string;
+  name?: string;
+  namespace?: string;
+  container?: string | null;
 }
 
 interface Investigation {
@@ -39,6 +50,12 @@ interface Investigation {
   confidence: number | null;
   evidence_used: string[] | null;
   created_at: string;
+  // Rich diagnosis detail (optional, populated by newer scans)
+  symptoms?: string | null;
+  impact?: string | null;
+  prevention?: string | null;
+  severity?: 'critical' | 'warning' | 'info' | null;
+  affected?: AffectedResource | null;
 }
 
 interface PodRow {
@@ -87,12 +104,16 @@ export default function Dashboard() {
   const [allPods, setAllPods] = useState<PodRow[]>([]);
   const [podsSearch, setPodsSearch] = useState('');
 
+  // Onboarding state
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingChecked, setOnboardingChecked] = useState(false);
+
   const channelRef = useRef<string | null>(null);
   const clusterMenuRef = useRef<HTMLDivElement>(null);
 
   const fetchClusters = async () => {
     try {
-      const res = await fetch(`${API_BASE}/clusters`);
+      const res = await apiFetch('/clusters');
       if (res.ok) {
         const data = await res.json();
         const nextClusters: string[] = data.clusters || [];
@@ -107,7 +128,7 @@ export default function Dashboard() {
   const fetchAllPods = async () => {
     try {
       const context = selectedCluster ? `?context=${encodeURIComponent(selectedCluster)}` : '';
-      const res = await fetch(`${API_BASE}/pods${context}`);
+      const res = await apiFetch(`/pods${context}`);
       if (res.ok) {
         const data = await res.json();
         setAllPods(data.pods || []);
@@ -158,6 +179,8 @@ export default function Dashboard() {
     };
   }, []);
 
+  const [simulatedStepIndex, setSimulatedStepIndex] = useState(-1);
+
   const handleRunInvestigation = async () => {
     if (!selectedCluster) {
       setError("Please select a cluster first.");
@@ -168,6 +191,7 @@ export default function Dashboard() {
     setProgressSteps([]);
     setCommandStatus('idle');
     setCommandOutput(null);
+    setSimulatedStepIndex(0);
     
     const newInvId = 'inv_' + Math.random().toString(36).substring(2, 9);
     const newInv = {
@@ -211,6 +235,11 @@ export default function Dashboard() {
         suggested_action: diag.suggested_action ?? null,
         confidence: diag.confidence ?? null,
         evidence_used: diag.evidence_used ?? null,
+        symptoms: diag.symptoms ?? null,
+        impact: diag.impact ?? null,
+        prevention: diag.prevention ?? null,
+        severity: diag.severity ?? null,
+        affected: diag.affected ?? null,
       };
       setCurrentInvestigation(completed);
 
@@ -263,9 +292,27 @@ export default function Dashboard() {
       });
 
       if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.detail || 'Failed to dispatch fix to cluster.');
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.detail || 'Failed to dispatch fix to cluster.');
       }
+
+      // The backend executes the fix and returns the REAL result.
+      const actionData = await res.json().catch(() => null);
+      const execStatus = actionData?.execution_status;
+      const execOutput = actionData?.execution_output;
+
+      if (execStatus === 'success') {
+        setCommandOutput(execOutput || 'Fix applied successfully.');
+        setCommandStatus('success');
+      } else if (execStatus === 'failed') {
+        setCommandOutput(execOutput || 'The cluster rejected the fix.');
+        setCommandStatus('failed');
+      } else {
+        // No execution result returned — action was only queued for an in-cluster agent.
+        setCommandOutput('Fix queued. Waiting for the in-cluster agent to execute it.');
+        setCommandStatus('pending');
+      }
+
     } catch (e: unknown) {
       console.error('Failed to run fix:', e);
       setError(e instanceof Error ? e.message : 'Failed to dispatch fix to cluster.');
@@ -286,12 +333,40 @@ export default function Dashboard() {
         setAuthLoading(false);
         fetchHistory();
         fetchClusters();
+        // Check onboarding state independently of clusters so cluster polling
+        // can't race the wizard out of view.
+        (async () => {
+          try {
+            const onboardingState = await fetchOnboardingState();
+            if (onboardingState === null || !onboardingState.is_complete) {
+              // No onboarding record or incomplete — open the Setup section
+              setShowOnboarding(true);
+              setActiveScreen('onboarding');
+            }
+          } catch {
+            // If onboarding check fails, proceed to normal dashboard
+          }
+          setOnboardingChecked(true);
+        })();
       }
     }
 
     hydrateAuth();
     return () => { cancelled = true; };
   }, [router]);
+
+  // Progressive step animation while backend is running (advances every ~2.5s)
+  useEffect(() => {
+    if (!isInvestigating) return;
+    const totalSteps = 7; // 6 named steps + "Root cause found"
+    const interval = setInterval(() => {
+      setSimulatedStepIndex(prev => {
+        if (prev >= totalSteps - 1) return prev; // stay at last step until backend responds
+        return prev + 1;
+      });
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [isInvestigating]);
 
   // Poll live metrics every 5s for the active cluster
   useEffect(() => {
@@ -302,7 +377,7 @@ export default function Dashboard() {
       if (consecutiveFailures >= 3) return;
       try {
         const context = selectedCluster ? `?context=${encodeURIComponent(selectedCluster)}` : '';
-        const res = await fetch(`${API_BASE}/metrics${context}`);
+        const res = await apiFetch(`/metrics${context}`);
         if (!res.ok) {
           consecutiveFailures++;
           return;
@@ -355,6 +430,8 @@ export default function Dashboard() {
   const viewHistoryItem = async (inv: Investigation) => {
     setActiveScreen('troubleshoot');
     setCurrentInvestigation(inv);
+    setSimulatedStepIndex(7);
+    setCommandStatus('idle');
     setProgressSteps([]);
     try {
       const res = await fetch(`${API_BASE}/investigate/${inv.id}/progress`);
@@ -374,6 +451,11 @@ export default function Dashboard() {
   const initials = user?.email ? user.email.slice(0, 2).toUpperCase() : 'KB';
 
   const NAV = [
+    ...(showOnboarding ? [{
+      group: 'Get started', items: [
+        { id: 'onboarding', label: 'Setup', icon: '◆' },
+      ],
+    }] : []),
     {
       group: 'Monitor', items: [
         { id: 'overview', label: 'Overview', icon: '▦' },
@@ -397,7 +479,7 @@ export default function Dashboard() {
   ];
 
   const currentScreenLabel = NAV.flatMap(section => section.items).find(item => item.id === activeScreen)?.label
-    || (activeScreen === 'settings' ? 'Settings' : 'Dashboard');
+    || (activeScreen === 'settings' ? 'Settings' : activeScreen === 'onboarding' ? 'Setup' : 'Dashboard');
   const navigateTo = (screen: string) => {
     setActiveScreen(screen);
     setSidebarOpen(false);
@@ -528,9 +610,27 @@ export default function Dashboard() {
 
             <div className="kb-scroll" style={(podsListModalOpen || troubleshootModalOpen || cmdkOpen) ? { overflow: 'hidden' } : {}}>
 
+              {/* ============ ONBOARDING (SETUP) ============ */}
+              {activeScreen === 'onboarding' && user && (
+                <div className="kb-screen">
+                  <OnboardingWizard
+                    user={{ id: user.id, email: user.email }}
+                    onComplete={() => {
+                      setShowOnboarding(false);
+                      navigateTo('overview');
+                      fetchClusters();
+                      fetchHistory();
+                    }}
+                  />
+                </div>
+              )}
+
               {/* ============ OVERVIEW ============ */}
               {activeScreen === 'overview' && (
                 <div className="kb-screen">
+                  {clusters.length === 0 ? (
+                    <EmptyState screen="overview" onConnectCluster={() => { setShowOnboarding(true); navigateTo('onboarding'); }} />
+                  ) : (<>
                   <div className="kb-welcome">
                     <div>
                       <h1 className="kb-welcome-title">Welcome back, <span className="accent">{firstName}</span></h1>
@@ -655,7 +755,7 @@ export default function Dashboard() {
                     )}
                   </div>
 
-
+                  </>)}
                 </div>
               )}
 
@@ -713,19 +813,16 @@ export default function Dashboard() {
                       <div className="kb-card">
                         <div className="kb-col-header"><span className="kb-col-title">Investigation status</span></div>
                         <ul className="kb-progress">
-                          {PROGRESS_STEPS.map((stepName, index, arr) => {
-                            const stepNamesFromProgress = progressSteps.map(p => p.step);
-                            const isStepInProgress = stepNamesFromProgress.includes(stepName);
-                            const latestStepIndex = progressSteps.length > 0 ? arr.indexOf(stepNamesFromProgress[stepNamesFromProgress.length - 1]) : -1;
+                          {PROGRESS_STEPS.map((stepName, index) => {
                             let state = 'pending';
                             if (currentInvestigation.status === 'completed') {
-                              // A finished investigation means every scan step ran.
                               state = 'completed';
                             } else if (currentInvestigation.status === 'failed') {
-                              state = isStepInProgress ? 'completed' : 'pending';
+                              state = index <= simulatedStepIndex ? 'completed' : 'pending';
                             } else {
-                              if (latestStepIndex === index) state = 'running';
-                              else if (latestStepIndex > index || isStepInProgress) state = 'completed';
+                              // Running: use the simulated progressive index
+                              if (index < simulatedStepIndex) state = 'completed';
+                              else if (index === simulatedStepIndex) state = 'running';
                             }
                             return (
                               <li key={stepName} className={`kb-step ${state}`}>
@@ -744,58 +841,112 @@ export default function Dashboard() {
                       {currentInvestigation.status === 'completed' && (
                         <div className="kb-card-wrap">
                           {currentInvestigation.root_cause ? (
-                            <div className="kb-card kb-diagnosis crit">
-                              <div className="kb-col-header"><span className="kb-col-title crit">Issue detected</span></div>
+                            <div className={`kb-card kb-diagnosis ${currentInvestigation.severity === 'warning' ? 'warn' : 'crit'}`}>
+                              <div className="kb-col-header">
+                                <span className={`kb-col-title ${currentInvestigation.severity === 'warning' ? '' : 'crit'}`}>Issue detected</span>
+                                {currentInvestigation.severity && (
+                                  <span className={`kb-sev-badge ${currentInvestigation.severity}`}>{currentInvestigation.severity}</span>
+                                )}
+                                {currentInvestigation.confidence != null && currentInvestigation.confidence > 0 && (
+                                  <span className="kb-diag-conf">{currentInvestigation.confidence}% confidence</span>
+                                )}
+                              </div>
                               <div className="kb-diag-body">
+                                {currentInvestigation.affected && (currentInvestigation.affected.name || currentInvestigation.affected.namespace) && (
+                                  <div className="kb-affected">
+                                    {currentInvestigation.affected.kind && <span className="kb-affected-chip"><span className="k">{currentInvestigation.affected.kind}</span>{currentInvestigation.affected.name}</span>}
+                                    {currentInvestigation.affected.namespace && <span className="kb-affected-chip"><span className="k">namespace</span>{currentInvestigation.affected.namespace}</span>}
+                                    {currentInvestigation.affected.container && <span className="kb-affected-chip"><span className="k">container</span>{currentInvestigation.affected.container}</span>}
+                                    {currentInvestigation.cluster_context && <span className="kb-affected-chip"><span className="k">cluster</span>{currentInvestigation.cluster_context}</span>}
+                                  </div>
+                                )}
+                                {currentInvestigation.symptoms && (
+                                  <div><span className="kb-field-label">What&apos;s happening</span><p className="kb-explanation">{currentInvestigation.symptoms}</p></div>
+                                )}
                                 <div><span className="kb-field-label">Root cause</span><p className="kb-root-cause">{currentInvestigation.root_cause}</p></div>
-                                <div className="kb-nested"><span className="kb-field-label">Explanation</span><p className="kb-explanation">{currentInvestigation.explanation}</p></div>
+                                <div className="kb-nested"><span className="kb-field-label">Why it happened</span><p className="kb-explanation">{currentInvestigation.explanation}</p></div>
+                                {currentInvestigation.impact && (
+                                  <div className="kb-impact"><span className="kb-field-label crit-label">Impact if unaddressed</span><p className="kb-explanation">{currentInvestigation.impact}</p></div>
+                                )}
                                 <div><span className="kb-field-label accent">Suggested fix</span><p className="kb-fix">{currentInvestigation.fix}</p></div>
+                                {currentInvestigation.prevention && (
+                                  <div><span className="kb-field-label">Prevent recurrence</span><p className="kb-explanation">{currentInvestigation.prevention}</p></div>
+                                )}
                                 {currentInvestigation.suggested_action ? (
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '16px' }}>
-                                    <span className="kb-field-label">Action</span>
-                                    <code className="kb-code">
-                                      {currentInvestigation.suggested_action.action_type}
-                                      <br />
-                                      <span style={{ color: 'var(--t3)', fontSize: '0.85em' }}>
-                                        {JSON.stringify(currentInvestigation.suggested_action.params)}
-                                      </span>
-                                    </code>
+                                  <div className="kb-action-section">
+                                    <span className="kb-field-label">Automated remediation</span>
+                                    <div className="kb-action-card">
+                                      <div className="kb-action-type">
+                                        <span className="kb-action-icon">⚡</span>
+                                        <span>{currentInvestigation.suggested_action.action_type.replace(/_/g, ' ')}</span>
+                                      </div>
+                                      <div className="kb-action-params">
+                                        {Object.entries(currentInvestigation.suggested_action.params || {}).filter(([,v]) => v != null).map(([k, v]) => (
+                                          <div key={k} className="kb-action-param">
+                                            <span className="kb-action-param-key">{k.replace(/_/g, ' ')}</span>
+                                            <span className="kb-action-param-val">{String(v)}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                      {currentInvestigation.kubectl_command && (
+                                        <code className="kb-action-cmd">$ {currentInvestigation.kubectl_command}</code>
+                                      )}
+                                    </div>
 
                                     {commandStatus === 'idle' && (
-                                      <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-                                        <button className="kb-btn" style={{ background: '#10b981', color: 'white', border: 'none' }} onClick={handleApproveFix}>
-                                          Approve & Run Fix
+                                      <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
+                                        <button className="kb-btn primary" onClick={handleApproveFix}>
+                                          ⚡ Approve &amp; Run Fix
                                         </button>
-                                        <button className="kb-btn" style={{ background: 'var(--s3)', color: 'var(--t1)', border: '1px solid var(--bd)' }} onClick={() => setTroubleshootModalOpen(true)}>
+                                        <button className="kb-btn" onClick={() => setTroubleshootModalOpen(true)}>
                                           Troubleshoot Manually
                                         </button>
                                       </div>
                                     )}
                                     {commandStatus === 'pending' && (
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px', color: 'var(--t2)' }}>
-                                        <span className="kb-spinner xs" />
-                                        Waiting for cluster agent to execute...
+                                      <div className="kb-action-pending">
+                                        <div className="kb-action-pending-bar" />
+                                        <div className="kb-action-pending-content">
+                                          <span className="kb-spinner xs" />
+                                          <div>
+                                            <div style={{ color: 'var(--t1)', fontWeight: 500, fontSize: '13px' }}>Applying fix to cluster…</div>
+                                            <div style={{ color: 'var(--t3)', fontSize: '11px', marginTop: '3px' }}>
+                                              {currentInvestigation.suggested_action.action_type.replace(/_/g, ' ')} →{' '}
+                                              {String(currentInvestigation.suggested_action.params?.deployment_name || currentInvestigation.suggested_action.params?.pod_name || 'workload')}
+                                            </div>
+                                          </div>
+                                        </div>
                                       </div>
                                     )}
                                     {commandStatus === 'success' && (
-                                      <div style={{ marginTop: '8px', padding: '12px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid #10b981', borderRadius: '6px' }}>
-                                        <div style={{ color: '#10b981', fontWeight: 600, marginBottom: '8px' }}>✓ Fix applied successfully</div>
-                                        <pre style={{ margin: 0, fontSize: '12px', color: 'var(--t2)', whiteSpace: 'pre-wrap' }}>{commandOutput}</pre>
+                                      <div className="kb-action-result success">
+                                        <div className="kb-action-result-head">✓ Fix applied successfully</div>
+                                        {commandOutput && <pre className="kb-action-result-output">{commandOutput}</pre>}
                                       </div>
                                     )}
                                     {commandStatus === 'failed' && (
-                                      <div style={{ marginTop: '8px', padding: '12px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', borderRadius: '6px' }}>
-                                        <div style={{ color: '#ef4444', fontWeight: 600, marginBottom: '8px' }}>✗ Fix failed</div>
-                                        <pre style={{ margin: 0, fontSize: '12px', color: 'var(--t2)', whiteSpace: 'pre-wrap' }}>{commandOutput}</pre>
+                                      <div className="kb-action-result failed">
+                                        <div className="kb-action-result-head">✗ Fix could not be applied</div>
+                                        {commandOutput && <pre className="kb-action-result-output">{commandOutput}</pre>}
                                         <button className="kb-btn" style={{ marginTop: '8px' }} onClick={() => setCommandStatus('idle')}>Try again</button>
                                       </div>
                                     )}
                                   </div>
                                 ) : (
                                   <div style={{ display: 'flex', marginTop: '16px' }}>
-                                    <button className="kb-btn" style={{ background: 'var(--s3)', color: 'var(--t1)', border: '1px solid var(--bd)' }} onClick={() => setTroubleshootModalOpen(true)}>
+                                    <button className="kb-btn" onClick={() => setTroubleshootModalOpen(true)}>
                                       Troubleshoot Manually
                                     </button>
+                                  </div>
+                                )}
+                                {currentInvestigation.evidence_used && currentInvestigation.evidence_used.length > 0 && (
+                                  <div>
+                                    <span className="kb-field-label">Evidence analyzed</span>
+                                    <div className="kb-evidence-chips">
+                                      {currentInvestigation.evidence_used.map((ev, i) => (
+                                        <span key={i} className="kb-evidence-chip">{ev}</span>
+                                      ))}
+                                    </div>
                                   </div>
                                 )}
                                 {currentInvestigation.confidence != null && currentInvestigation.confidence > 0 && (
@@ -804,6 +955,20 @@ export default function Dashboard() {
                                     <div className="kb-bar"><div className="kb-bar-fill" style={{ width: `${currentInvestigation.confidence}%` }} /></div>
                                   </div>
                                 )}
+
+                                <IncidentDeepDive
+                                  incidentKey={currentInvestigation.id}
+                                  selectedCluster={selectedCluster}
+                                  incidentContext={[
+                                    `Root cause: ${currentInvestigation.root_cause}`,
+                                    currentInvestigation.symptoms ? `Symptoms: ${currentInvestigation.symptoms}` : '',
+                                    currentInvestigation.explanation ? `Explanation: ${currentInvestigation.explanation}` : '',
+                                    currentInvestigation.impact ? `Impact: ${currentInvestigation.impact}` : '',
+                                    currentInvestigation.fix ? `Suggested fix: ${currentInvestigation.fix}` : '',
+                                    currentInvestigation.affected ? `Affected: ${currentInvestigation.affected.kind || ''} ${currentInvestigation.affected.name || ''} in ${currentInvestigation.affected.namespace || ''}` : '',
+                                    currentInvestigation.suggested_action ? `Proposed action: ${currentInvestigation.suggested_action.action_type} ${JSON.stringify(currentInvestigation.suggested_action.params)}` : '',
+                                  ].filter(Boolean).join('\n')}
+                                />
                               </div>
                             </div>
                           ) : (
@@ -864,22 +1029,22 @@ export default function Dashboard() {
               )}
 
               {/* ============ INCIDENTS ============ */}
-              {activeScreen === 'incidents' && <IncidentsScreen selectedCluster={selectedCluster} />}
+              {activeScreen === 'incidents' && (clusters.length === 0 ? <EmptyState screen="incidents" onConnectCluster={() => { setShowOnboarding(true); navigateTo('onboarding'); }} /> : <IncidentsScreen selectedCluster={selectedCluster} />)}
 
               {/* ============ PR RISK ============ */}
-              {activeScreen === 'prrisk' && <PRRiskScreen />}
+              {activeScreen === 'prrisk' && (clusters.length === 0 ? <EmptyState screen="prrisk" onConnectCluster={() => { setShowOnboarding(true); navigateTo('onboarding'); }} /> : <PRRiskScreen />)}
 
               {/* ============ WORKLOADS ============ */}
-              {activeScreen === 'workloads' && <WorkloadsScreen selectedCluster={selectedCluster} />}
+              {activeScreen === 'workloads' && (clusters.length === 0 ? <EmptyState screen="workloads" onConnectCluster={() => { setShowOnboarding(true); navigateTo('onboarding'); }} /> : <WorkloadsScreen selectedCluster={selectedCluster} />)}
 
               {/* ============ NODES ============ */}
-              {activeScreen === 'nodes' && <NodesScreen selectedCluster={selectedCluster} />}
+              {activeScreen === 'nodes' && (clusters.length === 0 ? <EmptyState screen="nodes" onConnectCluster={() => { setShowOnboarding(true); navigateTo('onboarding'); }} /> : <NodesScreen selectedCluster={selectedCluster} />)}
 
               {/* ============ ASK KUBRIC ============ */}
-              {activeScreen === 'ask' && <AskKubricScreen selectedCluster={selectedCluster} initials={initials} />}
+              {activeScreen === 'ask' && (clusters.length === 0 ? <EmptyState screen="ask" onConnectCluster={() => { setShowOnboarding(true); navigateTo('onboarding'); }} /> : <AskKubricScreen selectedCluster={selectedCluster} initials={initials} />)}
 
               {/* ============ PLAYBOOKS ============ */}
-              {activeScreen === 'playbooks' && <PlaybooksScreen />}
+              {activeScreen === 'playbooks' && (clusters.length === 0 ? <EmptyState screen="playbooks" onConnectCluster={() => { setShowOnboarding(true); navigateTo('onboarding'); }} /> : <PlaybooksScreen />)}
 
               {/* ============ SETTINGS ============ */}
               {activeScreen === 'settings' && <SettingsScreen user={user} selectedCluster={selectedCluster} clusters={clusters} fetchClusters={fetchClusters} />}
@@ -1052,7 +1217,7 @@ function ActivityChart() {
     let active = true;
     const poll = async () => {
       try {
-        const res = await fetch(`${API_BASE}/metrics/history`);
+        const res = await apiFetch('/metrics/history');
         if (res.ok && active) {
           const data = await res.json();
           if (data.samples) setSamples(data.samples);
@@ -1437,6 +1602,80 @@ function KubricStyles() {
       .kb-confidence-val { font-family:var(--font-jetbrains-mono), monospace; font-size:11px; color:var(--green); }
       .kb-bar { height:3px; background:var(--s3); overflow:hidden; } .kb-bar.sm { width:48px; }
       .kb-bar-fill { height:100%; background:var(--green); transition:width 1s ease-out; }
+
+      /* action card */
+      .kb-action-section { margin-top:18px; display:flex; flex-direction:column; gap:10px; }
+      .kb-action-card { background:#071009; border:1px solid rgba(124,255,178,.18); padding:16px; display:flex; flex-direction:column; gap:12px; }
+      .kb-action-type { display:flex; align-items:center; gap:8px; font-family:var(--font-jetbrains-mono),monospace; font-size:13px; font-weight:600; color:var(--green); text-transform:capitalize; }
+      .kb-action-icon { width:24px; height:24px; display:inline-flex; align-items:center; justify-content:center; background:var(--green-dim); border:1px solid var(--green-bd); font-size:12px; }
+      .kb-action-params { display:grid; grid-template-columns:repeat(auto-fill, minmax(180px,1fr)); gap:8px; }
+      .kb-action-param { display:flex; flex-direction:column; gap:2px; padding:8px 10px; background:rgba(255,255,255,.02); border:1px solid rgba(255,255,255,.06); }
+      .kb-action-param-key { font-family:var(--font-jetbrains-mono),monospace; font-size:9px; color:var(--t3); text-transform:uppercase; letter-spacing:.06em; }
+      .kb-action-param-val { font-family:var(--font-jetbrains-mono),monospace; font-size:12px; color:var(--t1); word-break:break-all; }
+      .kb-action-cmd { display:block; font-family:var(--font-jetbrains-mono),monospace; font-size:11px; color:var(--green); background:#060b08; border:1px solid rgba(124,255,178,.10); padding:10px 12px; word-break:break-all; }
+      .kb-action-pending { margin-top:10px; padding:14px 16px; background:#0d1710; border:1px solid rgba(124,255,178,.22); position:relative; overflow:hidden; }
+      .kb-action-pending-bar { position:absolute; top:0; left:0; height:2px; width:100%; background:linear-gradient(90deg,transparent,var(--green),transparent); animation:kb-action-slide 1.8s ease-in-out infinite; }
+      @keyframes kb-action-slide { 0%{transform:translateX(-100%)} 100%{transform:translateX(100%)} }
+      .kb-action-pending-content { display:flex; align-items:center; gap:12px; }
+      .kb-action-result { margin-top:10px; padding:14px 16px; }
+      .kb-action-result.success { background:rgba(124,255,178,.06); border:1px solid rgba(124,255,178,.32); }
+      .kb-action-result.failed { background:rgba(255,107,107,.06); border:1px solid rgba(255,107,107,.32); }
+      .kb-action-result-head { font-weight:600; font-size:13px; margin-bottom:6px; }
+      .kb-action-result.success .kb-action-result-head { color:var(--green); }
+      .kb-action-result.failed .kb-action-result-head { color:var(--crit); }
+      .kb-action-result-output { margin:0; font-family:var(--font-jetbrains-mono),monospace; font-size:11px; color:var(--t2); white-space:pre-wrap; line-height:1.6; }
+
+      /* rich diagnosis panel */
+      .kb-diagnosis.warn { border-color:rgba(245,181,68,.3); }
+      .kb-sev-badge { font-family:var(--font-jetbrains-mono),monospace; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; padding:3px 8px; }
+      .kb-sev-badge.critical { color:var(--crit); background:var(--crit-dim); border:1px solid var(--crit-bd); }
+      .kb-sev-badge.warning { color:#f5b544; background:rgba(245,181,68,.1); border:1px solid rgba(245,181,68,.3); }
+      .kb-sev-badge.info { color:var(--green); background:var(--green-dim); border:1px solid var(--green-bd); }
+      .kb-diag-conf { margin-left:auto; font-family:var(--font-jetbrains-mono),monospace; font-size:10px; color:var(--t3); }
+      .kb-affected { display:flex; flex-wrap:wrap; gap:7px; }
+      .kb-affected-chip { display:inline-flex; align-items:center; gap:6px; font-family:var(--font-jetbrains-mono),monospace; font-size:11px; color:var(--t1); background:#0d1710; border:1px solid rgba(124,255,178,.14); padding:4px 9px; }
+      .kb-affected-chip .k { color:var(--t3); text-transform:uppercase; letter-spacing:.05em; font-size:8.5px; }
+      .kb-impact { background:var(--crit-dim); border:1px solid var(--crit-bd); border-left:2px solid var(--crit); padding:12px; }
+      .kb-diagnosis.warn .kb-impact { background:rgba(245,181,68,.08); border-color:rgba(245,181,68,.3); border-left-color:#f5b544; }
+      .kb-field-label.crit-label { color:var(--crit); }
+      .kb-diagnosis.warn .kb-field-label.crit-label { color:#f5b544; }
+      .kb-evidence-chips { display:flex; flex-wrap:wrap; gap:6px; }
+      .kb-evidence-chip { font-family:var(--font-jetbrains-mono),monospace; font-size:10px; color:var(--t2); background:#0d1710; border:1px solid rgba(255,255,255,.08); padding:3px 8px; }
+
+      /* incident deep-dive drill-down */
+      .kb-dd { margin-top:8px; border:1px solid rgba(124,255,178,.16); background:#08110b; }
+      .kb-dd-toggle { width:100%; display:flex; align-items:center; gap:12px; padding:13px 15px; background:transparent; border:none; cursor:pointer; text-align:left; transition:background .15s ease; }
+      .kb-dd-toggle:hover { background:#0d1710; }
+      .kb-dd-toggle-icon { width:28px; height:28px; flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; color:var(--green); background:var(--green-dim); border:1px solid var(--green-bd); font-size:13px; }
+      .kb-dd-toggle-text { display:flex; flex-direction:column; gap:2px; flex:1; min-width:0; }
+      .kb-dd-toggle-title { font-size:13px; font-weight:600; color:var(--t1); }
+      .kb-dd-toggle-sub { font-size:11px; color:var(--t3); }
+      .kb-dd-chevron { color:var(--green); font-size:12px; }
+      .kb-dd-body { border-top:1px solid rgba(124,255,178,.12); padding:14px 15px; display:flex; flex-direction:column; gap:12px; animation:kb-detail-in .2s ease both; }
+      .kb-dd-chat { max-height:320px; overflow-y:auto; display:flex; flex-direction:column; gap:12px; padding-right:4px; }
+      .kb-dd-row { display:flex; gap:9px; align-items:flex-start; }
+      .kb-dd-row.user { flex-direction:row-reverse; }
+      .kb-dd-avatar { width:26px; height:26px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-family:var(--font-jetbrains-mono),monospace; font-size:8px; overflow:hidden; }
+      .kb-dd-avatar.user { background:#122019; border:1px solid rgba(124,255,178,.15); color:var(--t3); }
+      .kb-dd-avatar.kubric { background:var(--green-dim); border:1px solid var(--green-bd); }
+      .kb-dd-avatar-img { width:18px; height:18px; object-fit:contain; }
+      .kb-dd-bubble { max-width:80%; padding:10px 13px; font-size:12.5px; line-height:1.6; white-space:pre-wrap; word-break:break-word; }
+      .kb-dd-bubble.user { background:#122019; border:1px solid rgba(124,255,178,.14); color:var(--t1); }
+      .kb-dd-bubble.kubric { background:#0d1710; border:1px solid rgba(255,255,255,.07); border-left:2px solid var(--green); color:var(--t2); }
+      .kb-dd-typing { display:inline-flex; gap:4px; }
+      .kb-dd-typing span { width:5px; height:5px; background:var(--green); animation:kb-pulse 1.2s ease-in-out infinite; }
+      .kb-dd-typing span:nth-child(2) { animation-delay:.2s; } .kb-dd-typing span:nth-child(3) { animation-delay:.4s; }
+      .kb-dd-chips { display:flex; flex-wrap:wrap; gap:7px; }
+      .kb-dd-chip { font-size:11px; color:var(--t2); background:#0d1710; border:1px solid rgba(124,255,178,.14); padding:6px 11px; cursor:pointer; transition:all .15s ease; }
+      .kb-dd-chip:hover:not(:disabled) { color:var(--green); border-color:var(--green-bd); background:var(--green-dim); }
+      .kb-dd-chip:disabled { opacity:.4; cursor:not-allowed; }
+      .kb-dd-input { display:flex; gap:8px; }
+      .kb-dd-field { flex:1; background:#0b130d; border:1px solid rgba(255,255,255,.10); padding:9px 12px; color:var(--t1); font-family:var(--font-jetbrains-mono),monospace; font-size:12px; outline:none; transition:border-color .15s ease; }
+      .kb-dd-field:focus { border-color:rgba(124,255,178,.5); }
+      .kb-dd-send { flex-shrink:0; padding:9px 14px; background:var(--green-dim); border:1px solid var(--green-bd); color:var(--green); font-size:12px; font-weight:500; cursor:pointer; transition:background .15s ease; }
+      .kb-dd-send:hover:not(:disabled) { background:rgba(124,255,178,.16); }
+      .kb-dd-send:disabled { opacity:.4; cursor:not-allowed; }
+
       .kb-healthy { display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:40px 24px; border-color:var(--green-bd); }
       .kb-healthy-icon { width:48px; height:48px; display:flex; align-items:center; justify-content:center; font-size:22px; color:var(--green); border:0.5px solid var(--green-bd); background:var(--green-dim); margin-bottom:18px; }
       .kb-healthy-title { color:var(--green); font-size:18px; font-weight:500; margin:0 0 8px; }
@@ -1790,9 +2029,9 @@ function KubricStyles() {
 
       .kb-shell { grid-template-columns:252px minmax(0,1fr); background:#060b08; }
       .kb-side { background:#09110b; border-right:1px solid rgba(124,255,178,.10); }
-      .kb-side-logo { min-height:66px; padding:14px 18px; gap:7px; border-bottom:1px solid rgba(124,255,178,.08); }
-      .kb-side-logo-img { height:34px; }
-      .kb-side-logo-name { font-size:17px; }
+      .kb-side-logo { display:flex; align-items:center; gap:10px; border-bottom:1px solid rgba(124,255,178,.08); min-height:66px; padding:14px 18px; }
+      .kb-side-logo-img { height:36px; width:auto; display:block; flex-shrink:0; transform:translateY(2px); }
+      .kb-side-logo-name { font-size:19px; line-height:1; transform:translateY(1px); }
       .kb-side-plan { margin-left:auto; padding:3px 6px; border:1px solid rgba(124,255,178,.16); color:var(--t3); font-family:var(--font-jetbrains-mono),monospace; font-size:8px; letter-spacing:.08em; text-transform:uppercase; }
       .kb-nav { padding:12px 8px; gap:3px; }
       .kb-nav-section { padding:0; margin-bottom:13px; }
