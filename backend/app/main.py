@@ -1,4 +1,7 @@
 import os
+from datetime import datetime, timezone
+
+import httpx
 from fastapi import FastAPI, BackgroundTasks, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
@@ -22,6 +25,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Register routers
+from app.api.onboarding import router as onboarding_router  # noqa: E402
+app.include_router(onboarding_router)
 
 @app.on_event("startup")
 async def startup_event():
@@ -212,7 +219,12 @@ class AgentIngestRequest(BaseModel):
     evidence: Dict[str, Any]
 
 @app.get("/clusters")
-async def get_clusters():
+async def get_clusters(authorization: Optional[str] = Header(None)):
+    if _use_agent_source():
+        # Push mode: list clusters that have reported state, scoped to the user.
+        uid = _user_id_from_jwt(authorization)
+        clusters = await InsForgeClient().list_state_clusters(uid)
+        return {"clusters": clusters}
     try:
         output = KubectlExecutor.run("kubectl config get-contexts -o name", parse_json=False)
         clusters = [line.strip() for line in output.split('\n') if line.strip()] if output else []
@@ -223,7 +235,7 @@ async def get_clusters():
 
 
 @app.get("/metrics")
-async def get_cluster_metrics(context: Optional[str] = None):
+async def get_cluster_metrics(context: Optional[str] = None, authorization: Optional[str] = Header(None)):
     """
     Returns real-time cluster resource usage percentages.
     Requires metrics-server to be installed in the cluster.
@@ -237,6 +249,10 @@ async def get_cluster_metrics(context: Optional[str] = None):
         "node_count": 0,
         "pod_count": 0,
     }
+
+    if _use_agent_source():
+        served = await _served_state("metrics", context, _user_id_from_jwt(authorization))
+        return served if served else metrics
 
     try:
         # --- Node count ---
@@ -407,6 +423,152 @@ async def get_investigation_progress(investigation_id: str, authorization: Optio
         logger.error(f"Failed to fetch progress for {investigation_id}: {e}")
         return {"progress": []}
 
+def _build_action_argv(action_type: str, params: Dict[str, Any], context: Optional[str]) -> Optional[list]:
+    """
+    Build a kubectl argument LIST (no shell) for a fixable action.
+    Using an argv list makes execution injection-proof and avoids
+    cross-platform quoting issues. Returns None for unknown actions.
+    """
+    ns = str(params.get("namespace") or "default")
+    base = ["kubectl"]
+    if context:
+        base += [f"--context={context}"]
+    base += ["-n", ns]
+
+    if action_type == "restart_pod":
+        pod = str(params.get("pod_name") or "")
+        if not pod:
+            return None
+        return base + ["delete", "pod", pod]
+
+    if action_type == "rollback_deployment":
+        dep = str(params.get("deployment_name") or "")
+        if not dep:
+            return None
+        argv = base + ["rollout", "undo", f"deployment/{dep}"]
+        rev = params.get("target_revision")
+        if rev:
+            argv += [f"--to-revision={rev}"]
+        return argv
+
+    if action_type == "update_resource_limits":
+        dep = str(params.get("deployment_name") or "")
+        container = str(params.get("container_name") or "")
+        limits = []
+        if params.get("memory_limit"):
+            limits.append(f"memory={params['memory_limit']}")
+        if params.get("cpu_limit"):
+            limits.append(f"cpu={params['cpu_limit']}")
+        if not dep or not container or not limits:
+            return None
+        return base + ["set", "resources", f"deployment/{dep}", f"-c={container}", f"--limits={','.join(limits)}"]
+
+    if action_type == "scale_deployment":
+        dep = str(params.get("deployment_name") or "")
+        replicas = params.get("replicas")
+        if not dep or replicas is None:
+            return None
+        return base + ["scale", f"deployment/{dep}", f"--replicas={replicas}"]
+
+    if action_type == "update_environment_variable":
+        dep = str(params.get("deployment_name") or "")
+        env_name = str(params.get("env_name") or "")
+        env_value = str(params.get("env_value") or "")
+        if not dep or not env_name:
+            return None
+        return base + ["set", "env", f"deployment/{dep}", f"{env_name}={env_value}"]
+
+    return None
+
+
+def _execute_action_locally(action_type: str, params: Dict[str, Any], context: Optional[str]) -> tuple[str, str]:
+    """
+    Execute a fix action directly from the backend using kubectl (argv, no shell).
+    Returns (status, output) where status is 'success' or 'failed'.
+    """
+    import subprocess
+    argv = _build_action_argv(action_type, params, context)
+    if argv is None:
+        return "failed", f"Could not build a safe command for action '{action_type}' with the given parameters."
+    try:
+        logger.info(f"Executing fix action: {' '.join(argv)}")
+        result = subprocess.run(
+            argv, capture_output=True, text=True, timeout=30, check=False,
+        )
+        if result.returncode == 0:
+            out = (result.stdout or "").strip() or "Command executed successfully."
+            return "success", out
+        err = (result.stderr or result.stdout or "").strip()
+        return "failed", err or f"kubectl exited with code {result.returncode}."
+    except subprocess.TimeoutExpired:
+        return "failed", "The fix command timed out. The cluster may be unreachable."
+    except FileNotFoundError:
+        return "failed", "kubectl was not found on the server. Ensure kubectl is installed and on PATH."
+    except Exception as e:
+        return "failed", f"Unexpected error while applying the fix: {e}"
+
+
+def _use_agent_source() -> bool:
+    """
+    Data-source switch (see docs/ARCHITECTURE_push-vs-pull.md).
+    - 'local' (default): read endpoints run kubectl directly (local dev).
+    - 'agent': read endpoints serve the latest snapshot pushed by the in-cluster agent.
+    """
+    return os.getenv("KUBRIC_DATA_SOURCE", "local").strip().lower() == "agent"
+
+
+async def _served_state(section: str, context: Optional[str], user_id: Optional[str] = None):
+    """Return a stored section (pods/nodes/workloads/events/metrics) for a cluster in agent mode."""
+    client = InsForgeClient()
+    if not context:
+        return None
+    state = await client.get_cluster_state(context, user_id=user_id)
+    if not state:
+        return None
+    return state.get(section)
+
+
+_UNHEALTHY_POD_STATES = {
+    "CrashLoopBackOff", "ImagePullBackOff", "Pending", "Error",
+    "OOMKilled", "ContainerCreating", "Failed",
+}
+
+
+async def _evidence_from_state(context: Optional[str], user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """
+    Build an AI-reasoning evidence dict from the latest agent-pushed snapshot,
+    matching the shape produced by the local InvestigationService.
+    """
+    client = InsForgeClient()
+    state = await client.get_cluster_state(context, user_id=user_id) if context else None
+    if not state:
+        return None
+
+    pods = state.get("pods") or []
+    problematic = [
+        {"name": p.get("name"), "namespace": p.get("namespace"), "status": p.get("status")}
+        for p in pods
+        if p.get("status") in _UNHEALTHY_POD_STATES or (p.get("restarts") or 0) > 0
+    ]
+    workloads = state.get("workloads") or []
+    deployments = [
+        {
+            "name": w.get("name"), "namespace": w.get("namespace"),
+            "ready_replicas": w.get("pods_ready"), "desired_replicas": w.get("pods_desired"),
+            "status": w.get("status"),
+        }
+        for w in workloads if w.get("status") not in ("Healthy", "Unknown")
+    ]
+    warnings = [e for e in (state.get("events") or []) if e.get("type") == "Warning"][:20]
+    return {
+        "pods": {"healthy": len(problematic) == 0, "problematic_pods": problematic},
+        "logs": state.get("logs") or {},
+        "events": warnings,
+        "deployments": deployments,
+        "network": {},
+    }
+
+
 def _user_id_from_jwt(authorization: Optional[str]) -> Optional[str]:
     """Best-effort extraction of the user id (sub claim) from a Bearer JWT."""
     if not authorization:
@@ -445,9 +607,16 @@ async def investigate_cluster(request: InvestigationRequest, authorization: Opti
     active_id = real_investigation_id or None
 
     try:
-        # 1. Collect Evidence
-        service = InvestigationService(client=client)
-        investigation_data = await service.run_investigation(active_id, request.cluster_context)
+        # 1. Collect Evidence — from the agent-pushed snapshot (push mode) or
+        #    live kubectl inspectors (local mode).
+        if _use_agent_source():
+            investigation_data = await _evidence_from_state(request.cluster_context, user_id)
+            if investigation_data is None:
+                investigation_data = {"pods": {"healthy": True, "problematic_pods": []},
+                                      "logs": {}, "events": [], "deployments": [], "network": {}}
+        else:
+            service = InvestigationService(client=client)
+            investigation_data = await service.run_investigation(active_id, request.cluster_context)
 
         # 2. AI Reasoning
         ai_agent = KubernetesAIAgent()
@@ -498,6 +667,104 @@ async def process_incident_background(investigation_id: str, evidence: dict):
         }
         await client.complete_investigation(investigation_id, failure_diagnosis)
 
+async def _record_heartbeat(cluster_token: str, user_id: str):
+    """Update clusters.last_heartbeat_at and mark onboarding connection as verified if needed."""
+    insforge_url = os.getenv("INSFORGE_URL", "")
+    insforge_api_key = os.getenv("INSFORGE_API_KEY", "")
+    if not insforge_url or not insforge_api_key:
+        logger.warning("Cannot record heartbeat: INSFORGE_URL or INSFORGE_API_KEY not set")
+        return
+
+    headers = {
+        "Authorization": f"Bearer {insforge_api_key}",
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal",
+    }
+    base_url = f"{insforge_url}/api/database/records"
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    async with httpx.AsyncClient() as http_client:
+        # 1. Update clusters.last_heartbeat_at
+        try:
+            resp = await http_client.patch(
+                f"{base_url}/clusters?cluster_token=eq.{cluster_token}",
+                headers=headers,
+                json={"last_heartbeat_at": now_iso},
+            )
+            resp.raise_for_status()
+            logger.debug(f"Heartbeat recorded for cluster_token={cluster_token[:8]}...")
+        except Exception as e:
+            logger.error(f"Failed to update last_heartbeat_at: {e}")
+
+        # 2. Check if user is in onboarding (is_complete = false) and mark connection verified
+        try:
+            onboarding_resp = await http_client.get(
+                f"{base_url}/user_onboarding?user_id=eq.{user_id}&is_complete=eq.false&select=id,current_step,completed_steps,step_timestamps",
+                headers=headers,
+            )
+            onboarding_resp.raise_for_status()
+            onboarding_data = onboarding_resp.json()
+
+            if onboarding_data:
+                record = onboarding_data[0]
+                completed_steps = record.get("completed_steps") or []
+                # If the connection steps (web_token or cli) are not yet marked completed,
+                # we advance them — the heartbeat proves the agent connected successfully.
+                connection_steps = ["web_token", "cli"]
+                needs_update = any(step not in completed_steps for step in connection_steps
+                                   if record.get("current_step") == step)
+
+                if needs_update:
+                    current_step = record["current_step"]
+                    step_timestamps = record.get("step_timestamps") or {}
+                    completed_steps.append(current_step)
+                    step_timestamps[current_step] = now_iso
+
+                    # Advance to the next step in the onboarding sequence
+                    from app.models.onboarding import ONBOARDING_STEPS
+                    current_idx = ONBOARDING_STEPS.index(current_step) if current_step in ONBOARDING_STEPS else -1
+                    next_step = ONBOARDING_STEPS[current_idx + 1] if current_idx + 1 < len(ONBOARDING_STEPS) else current_step
+
+                    patch_payload = {
+                        "completed_steps": completed_steps,
+                        "step_timestamps": step_timestamps,
+                        "current_step": next_step,
+                    }
+                    patch_resp = await http_client.patch(
+                        f"{base_url}/user_onboarding?user_id=eq.{user_id}",
+                        headers=headers,
+                        json=patch_payload,
+                    )
+                    patch_resp.raise_for_status()
+                    logger.info(f"Onboarding connection verified for user {user_id}, advanced to step '{next_step}'")
+        except Exception as e:
+            logger.error(f"Failed to check/update onboarding state on heartbeat: {e}")
+
+
+@app.post("/api/v1/heartbeat")
+async def agent_heartbeat(authorization: Optional[str] = Header(None)):
+    """Dedicated heartbeat endpoint for the in-cluster agent to call periodically.
+
+    Updates clusters.last_heartbeat_at and optionally advances onboarding state
+    when the cluster is still in the connection verification phase.
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
+
+    cluster_token = authorization.split("Bearer ")[1].strip()
+    client = InsForgeClient()
+
+    # Validate token
+    user_id, cluster_name = await client.validate_cluster_token(cluster_token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid cluster token")
+
+    # Record the heartbeat and update onboarding if needed
+    await _record_heartbeat(cluster_token, user_id)
+
+    return {"status": "ok"}
+
+
 @app.post("/api/v1/ingest")
 async def ingest_incident(request: AgentIngestRequest, background_tasks: BackgroundTasks, authorization: Optional[str] = Header(None)):
     """Receives incident evidence from the in-cluster push agent."""
@@ -514,6 +781,9 @@ async def ingest_incident(request: AgentIngestRequest, background_tasks: Backgro
     if not user_id:
         logger.warning(f"Unauthorized cluster token: {cluster_token}")
         raise HTTPException(status_code=401, detail="Invalid cluster token")
+
+    # 1b. Record heartbeat (updates last_heartbeat_at + onboarding state if applicable)
+    await _record_heartbeat(cluster_token, user_id)
         
     try:
         # 2. Create a new investigation in DB for this user
@@ -523,10 +793,10 @@ async def ingest_incident(request: AgentIngestRequest, background_tasks: Backgro
             logger.error("Failed to create investigation in DB during ingestion.")
             raise HTTPException(status_code=500, detail="Database error")
             
-        # 2. Queue AI Reasoning in background
+        # 3. Queue AI Reasoning in background
         background_tasks.add_task(process_incident_background, investigation_id, request.evidence)
         
-        # 3. Immediately return 200 OK so the agent is not blocked
+        # 4. Immediately return 200 OK so the agent is not blocked
         return {"status": "success", "investigation_id": investigation_id, "message": "Incident queued for AI analysis"}
     except Exception as e:
         logger.error(f"Unexpected error during ingestion: {str(e)}")
@@ -628,7 +898,31 @@ async def create_action(request: ActionCreateRequest, authorization: Optional[st
         )
         if not action:
             raise HTTPException(status_code=500, detail="Failed to create action (no action returned)")
-        return action
+
+        if _use_agent_source():
+            # Push mode: leave the action pending. The in-cluster agent polls
+            # /api/v1/actions/pending, executes it with its own RBAC, and reports
+            # back via /api/v1/actions/{id}/result (realtime updates the UI).
+            return {
+                **action,
+                "execution_status": "pending",
+                "execution_output": "Fix dispatched to the in-cluster agent. It will apply shortly.",
+            }
+
+        # Local mode: the backend has kubectl access, so execute directly and
+        # report the REAL result.
+        exec_status, exec_output = _execute_action_locally(
+            request.action_type, request.params, inv_details.get("cluster_context")
+        )
+        action_id = action.get("id")
+        if action_id:
+            await client.update_action_result(action_id, exec_status, {"message": exec_output})
+
+        return {
+            **action,
+            "execution_status": exec_status,
+            "execution_output": exec_output,
+        }
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -679,10 +973,53 @@ async def update_action_result(action_id: str, request: ActionResultRequest, aut
     return {"status": "success"}
 
 
+class ClusterStateRequest(BaseModel):
+    cluster_context: Optional[str] = None
+    pods: list = []
+    nodes: list = []
+    workloads: list = []
+    events: list = []
+    metrics: Dict[str, Any] = {}
+    logs: Dict[str, str] = {}
+    collected_at: Optional[str] = None
+
+
+@app.post("/api/v1/state")
+async def push_cluster_state(request: ClusterStateRequest, authorization: Optional[str] = Header(None)):
+    """
+    Push architecture: the in-cluster agent periodically posts a full cluster
+    snapshot here. Dashboard read endpoints serve from this stored state when
+    KUBRIC_DATA_SOURCE=agent, so the backend never needs kubectl access to the
+    customer cluster.
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
+
+    cluster_token = authorization.split("Bearer ")[1].strip()
+    client = InsForgeClient()
+
+    user_id, cluster_name = await client.validate_cluster_token(cluster_token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid cluster token")
+
+    from datetime import datetime as _dt
+    ok = await client.upsert_cluster_state(user_id, cluster_name or request.cluster_context or "default", {
+        "pods": request.pods,
+        "nodes": request.nodes,
+        "workloads": request.workloads,
+        "events": request.events,
+        "metrics": request.metrics,
+        "logs": request.logs,
+        "collected_at": request.collected_at or _dt.utcnow().isoformat(),
+    })
+    if not ok:
+        raise HTTPException(status_code=500, detail="Failed to store cluster state")
+    return {"status": "success"}
+
+
 # --- Metrics History (in-memory time-series for the chart) ---
 import time
 import asyncio
-from datetime import datetime
 
 _metrics_history: list[dict] = []  # stores last 30 samples
 _MAX_HISTORY = 30
@@ -764,8 +1101,11 @@ async def get_metrics_history():
 # ============================================================
 
 @app.get("/workloads")
-async def get_workloads(context: Optional[str] = None):
+async def get_workloads(context: Optional[str] = None, authorization: Optional[str] = Header(None)):
     """Returns real deployments in the cluster with pod/resource status."""
+    if _use_agent_source():
+        served = await _served_state("workloads", context, _user_id_from_jwt(authorization))
+        return {"workloads": served or []}
     try:
         deployments_json = KubectlExecutor.run(
             "kubectl get deployments -A -o json", parse_json=True, context=context
@@ -816,9 +1156,11 @@ async def get_workloads(context: Optional[str] = None):
             if match_labels and all(pod_labels.get(k) == v for k, v in match_labels.items()):
                 owned_pods.append(pod)
 
+        bad_reasons = {"ImagePullBackOff", "ErrImagePull", "CrashLoopBackOff", "CreateContainerConfigError", "InvalidImageName"}
         total_cpu_m = 0
         total_mem_mi = 0
         max_restarts = 0
+        has_broken_pod = False
         for pod in owned_pods:
             pname = pod.get("metadata", {}).get("name", "")
             key = f"{ns}/{pname}"
@@ -827,17 +1169,24 @@ async def get_workloads(context: Optional[str] = None):
                 total_mem_mi += pod_metrics[key]["mem_mi"]
             for cs in pod.get("status", {}).get("containerStatuses", []):
                 max_restarts = max(max_restarts, cs.get("restartCount", 0))
+                waiting_reason = cs.get("state", {}).get("waiting", {}).get("reason")
+                if waiting_reason in bad_reasons:
+                    has_broken_pod = True
+
+        # A stuck rollout keeps the old pod Ready while the new pod is broken, so
+        # readyReplicas can still equal desired. Surface that as Degraded, not Healthy.
+        rollout_stuck = has_broken_pod or (status.get("unavailableReplicas", 0) or 0) > 0
 
         if desired == 0:
             status_label = "Unknown"
-        elif ready >= desired:
-            status_label = "Healthy"
-        elif ready > 0:
+        elif ready == 0:
+            status_label = "Down"
+        elif ready < desired or rollout_stuck:
             status_label = "Degraded"
         else:
-            status_label = "Down"
+            status_label = "Healthy"
 
-        if status_label == "Down" or max_restarts >= 5:
+        if status_label == "Down" or max_restarts >= 5 or has_broken_pod:
             risk = "high"
         elif status_label == "Degraded" or max_restarts >= 1:
             risk = "medium"
@@ -860,8 +1209,11 @@ async def get_workloads(context: Optional[str] = None):
 
 
 @app.get("/pods")
-async def get_pods(context: Optional[str] = None):
+async def get_pods(context: Optional[str] = None, authorization: Optional[str] = Header(None)):
     """Returns a list of all pods with their status and metrics."""
+    if _use_agent_source():
+        served = await _served_state("pods", context, _user_id_from_jwt(authorization))
+        return {"pods": served or []}
     try:
         pods_json = KubectlExecutor.run("kubectl get pods -A -o json", parse_json=True, context=context)
         items = pods_json.get("items", [])
@@ -916,8 +1268,11 @@ async def get_pods(context: Optional[str] = None):
 
 
 @app.get("/nodes")
-async def get_nodes(context: Optional[str] = None):
+async def get_nodes(context: Optional[str] = None, authorization: Optional[str] = Header(None)):
     """Returns real node-level status and resource usage."""
+    if _use_agent_source():
+        served = await _served_state("nodes", context, _user_id_from_jwt(authorization))
+        return {"nodes": served or []}
     try:
         nodes_json = KubectlExecutor.run("kubectl get nodes -o json", parse_json=True, context=context)
     except ClusterUnreachableError:
@@ -968,8 +1323,11 @@ async def get_nodes(context: Optional[str] = None):
 
 
 @app.get("/events")
-async def get_events(context: Optional[str] = None, limit: int = 30):
+async def get_events(context: Optional[str] = None, limit: int = 30, authorization: Optional[str] = Header(None)):
     """Returns recent real Kubernetes events across all namespaces."""
+    if _use_agent_source():
+        served = await _served_state("events", context, _user_id_from_jwt(authorization))
+        return {"events": (served or [])[:limit]}
     try:
         events_json = KubectlExecutor.run("kubectl get events -A -o json", parse_json=True, context=context)
     except ClusterUnreachableError:
@@ -1006,6 +1364,7 @@ class AskRequest(BaseModel):
     message: str
     cluster_context: Optional[str] = None
     image: Optional[str] = None  # data URL: "data:image/png;base64,...."
+    incident_context: Optional[str] = None  # diagnosis details for a scoped follow-up chat
 
 
 @app.post("/ask")
@@ -1049,10 +1408,18 @@ async def ask_kubric(request: AskRequest):
 
     snapshot = "\n".join(snapshot_lines)
 
+    scoped = bool(request.incident_context)
     system_prompt = (
         "You are Kubric, an AI SRE assistant. Answer the user's question about their "
         "Kubernetes cluster concisely and factually, grounded in the provided live snapshot. "
-        "If an image is attached (screenshot, kubectl output, error, or dashboard), analyse it "
+        + (
+            "You are in a focused follow-up conversation about ONE specific incident whose "
+            "diagnosis is provided below. Answer specifically about THIS incident. Give the "
+            "engineer real depth: mechanism, consequences, exact commands to inspect or fix, "
+            "trade-offs, and how to verify the fix worked. "
+            if scoped else ""
+        )
+        + "If an image is attached (screenshot, kubectl output, error, or dashboard), analyse it "
         "and incorporate what you see. When you spot a problem, name the likely root cause and a "
         "concrete fix (including a kubectl command when relevant). "
         "Write in plain prose. Do NOT use markdown formatting of any kind: no '#' headings, "
@@ -1062,7 +1429,8 @@ async def ask_kubric(request: AskRequest):
         'Respond ONLY with JSON: {"reply": "<your answer as plain text with line breaks>"}'
     )
 
-    text_block = f"Cluster snapshot:\n{snapshot}\n\nQuestion: {request.message}"
+    incident_block = f"Incident under discussion:\n{request.incident_context}\n\n" if scoped else ""
+    text_block = f"{incident_block}Cluster snapshot:\n{snapshot}\n\nQuestion: {request.message}"
 
     # Build user content — multimodal if an image was provided
     if request.image:
