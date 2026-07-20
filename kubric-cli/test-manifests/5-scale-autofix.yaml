@@ -1,0 +1,37 @@
+# Scenario 5: Over-provisioned replicas -> scale_deployment
+# Deploy:  kubectl apply -f 5-scale-autofix.yaml
+# Cleanup: kubectl delete -f 5-scale-autofix.yaml
+#
+# This asks for 10 replicas that each request 1 CPU + 2Gi memory (20Gi total).
+# No typical dev cluster can fit all of them, so most pods stay Pending with
+# "FailedScheduling: Insufficient cpu/memory". The scan detects the Pending pods
+# and should suggest scale_deployment (scale down to the number that fits).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kubric-fix-tests
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scale-autofix
+  namespace: kubric-fix-tests
+spec:
+  replicas: 10
+  selector:
+    matchLabels:
+      app: scale-autofix
+  template:
+    metadata:
+      labels:
+        app: scale-autofix
+    spec:
+      containers:
+        - name: app
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: "1"       # 10 replicas x 1 core = 10 cores requested
+              memory: "2Gi"  # 10 replicas x 2Gi = 20Gi requested — no dev node fits this
