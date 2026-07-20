@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: imagepull-e2e-demo
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: imagepull-e2e-demo
+  template:
+    metadata:
+      labels:
+        app: imagepull-e2e-demo
+    spec:
+      containers:
+      - name: test-container
+        # This image is intentionally invalid to trigger an ImagePullBackOff
+        image: nginx:999.999.999-invalid
+        ports:
+        - containerPort: 80
