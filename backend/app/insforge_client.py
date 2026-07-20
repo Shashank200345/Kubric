@@ -234,6 +234,82 @@ class InsForgeClient:
                 logger.error(f"Failed to update action result: {e}")
                 return False
 
+    async def upsert_cluster_state(self, user_id: str, cluster_name: str, sections: dict) -> bool:
+        """
+        Store the latest cluster snapshot pushed by the in-cluster agent.
+        Upserts on (user_id, cluster_name) so we always keep the most recent state.
+        """
+        if not self.url:
+            return False
+        async with httpx.AsyncClient() as client:
+            try:
+                payload = {
+                    "user_id": user_id,
+                    "cluster_name": cluster_name,
+                    "pods": sections.get("pods", []),
+                    "nodes": sections.get("nodes", []),
+                    "workloads": sections.get("workloads", []),
+                    "events": sections.get("events", []),
+                    "metrics": sections.get("metrics", {}),
+                    "logs": sections.get("logs", {}),
+                    "collected_at": sections.get("collected_at"),
+                    "updated_at": sections.get("collected_at"),
+                }
+                # PostgREST upsert: POST with merge-duplicates against the unique key.
+                headers = {**self.headers, "Prefer": "resolution=merge-duplicates,return=minimal"}
+                resp = await client.post(
+                    f"{self.base_url}/cluster_state?on_conflict=user_id,cluster_name",
+                    headers=headers,
+                    json=[payload],
+                )
+                resp.raise_for_status()
+                return True
+            except Exception as e:
+                detail = ""
+                if hasattr(e, "response") and getattr(e, "response", None) is not None:
+                    detail = f" — {e.response.text}"
+                logger.error(f"Failed to upsert cluster state for {cluster_name}: {e}{detail}")
+                return False
+
+    async def get_cluster_state(self, cluster_name: str, user_id: str | None = None) -> dict | None:
+        """Read the latest stored snapshot for a cluster (optionally scoped to a user)."""
+        if not self.url:
+            return None
+        query = f"cluster_name=eq.{cluster_name}"
+        if user_id:
+            query += f"&user_id=eq.{user_id}"
+        async with httpx.AsyncClient() as client:
+            try:
+                resp = await client.get(
+                    f"{self.base_url}/cluster_state?{query}&order=collected_at.desc&limit=1",
+                    headers=self.headers,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                return data[0] if data else None
+            except Exception as e:
+                logger.error(f"Failed to fetch cluster state for {cluster_name}: {e}")
+        return None
+
+    async def list_state_clusters(self, user_id: str | None = None) -> list[str]:
+        """List cluster names that have reported state (optionally scoped to a user)."""
+        if not self.url:
+            return []
+        query = "select=cluster_name&order=cluster_name.asc"
+        if user_id:
+            query += f"&user_id=eq.{user_id}"
+        async with httpx.AsyncClient() as client:
+            try:
+                resp = await client.get(f"{self.base_url}/cluster_state?{query}", headers=self.headers)
+                resp.raise_for_status()
+                names = [row.get("cluster_name") for row in resp.json() if row.get("cluster_name")]
+                # de-duplicate while preserving order
+                seen = set()
+                return [n for n in names if not (n in seen or seen.add(n))]
+            except Exception as e:
+                logger.error(f"Failed to list state clusters: {e}")
+        return []
+
     async def create_investigation(self, cluster_context: str, user_id: str = None) -> str | None:
         """Create a new investigation record from a push agent."""
         if not self.url:
