@@ -1,0 +1,35 @@
+# Scenario 2: Missing env var -> update_environment_variable
+# Deploy:  kubectl apply -f 2-missing-env-autofix.yaml
+# Cleanup: kubectl delete -f 2-missing-env-autofix.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kubric-fix-tests
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: missing-env-autofix
+  namespace: kubric-fix-tests
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: missing-env-autofix
+  template:
+    metadata:
+      labels:
+        app: missing-env-autofix
+    spec:
+      containers:
+        - name: app
+          image: busybox:1.36
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              if [ -z "$REQUIRED_VAR" ]; then
+                echo "FATAL: REQUIRED_VAR environment variable is not set. Exiting." >&2
+                exit 1
+              fi
+              echo "REQUIRED_VAR is set to '$REQUIRED_VAR' - running."
+              sleep 3600
