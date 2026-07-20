@@ -1,0 +1,36 @@
+# Scenario 4: CrashLoopBackOff (transient failure) -> restart_pod
+# Deploy:  kubectl apply -f 4-restart-pod-autofix.yaml
+# Cleanup: kubectl delete -f 4-restart-pod-autofix.yaml
+#
+# This pod crashes on first few boots (simulating a race condition or
+# transient dependency failure). The agent should suggest restart_pod.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kubric-fix-tests
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: restart-autofix
+  namespace: kubric-fix-tests
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: restart-autofix
+  template:
+    metadata:
+      labels:
+        app: restart-autofix
+    spec:
+      containers:
+        - name: app
+          image: busybox:1.36
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "Attempting to connect to upstream dependency..."
+              sleep 2
+              echo "ERROR: connection refused to upstream-svc:5432" >&2
+              exit 1
