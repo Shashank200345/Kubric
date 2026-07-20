@@ -8,6 +8,7 @@ from loguru import logger
 from kubernetes import client, config
 from kubernetes.client.exceptions import ApiException
 from k8s.service import InvestigationService
+from collector import StateCollector
 
 try:
     config.load_incluster_config()
@@ -29,6 +30,34 @@ _IMAGE_PULL_REASONS = ["ImagePullBackOff", "ErrImagePull"]
 BACKEND_INGEST_URL = os.getenv("INGESTION_ENDPOINT", "http://host.minikube.internal:8000/api/v1/ingest")
 CLUSTER_TOKEN = os.getenv("CLUSTER_TOKEN", "default-token")
 CLUSTER_NAME = os.getenv("CLUSTER_NAME", "minikube")
+
+_state_collector = StateCollector(v1, apps_v1)
+
+
+async def _push_state_once() -> None:
+    """Collect a full cluster snapshot and push it to the backend (push architecture)."""
+    try:
+        snapshot = _state_collector.collect()
+    except Exception as e:
+        logger.error(f"[agent] Failed to collect cluster state: {e}")
+        return
+
+    snapshot["cluster_context"] = CLUSTER_NAME
+    state_url = BACKEND_INGEST_URL.replace("/ingest", "/state")
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client_http:
+            resp = await client_http.post(
+                state_url,
+                json=snapshot,
+                headers={"Authorization": f"Bearer {CLUSTER_TOKEN}"},
+            )
+            resp.raise_for_status()
+            logger.info(
+                f"[agent] Pushed cluster state: {len(snapshot['pods'])} pods, "
+                f"{len(snapshot['workloads'])} workloads, {len(snapshot['nodes'])} nodes."
+            )
+    except Exception as e:
+        logger.error(f"[agent] Failed to push cluster state: {e}")
 
 def _extract_unhealthy_pods(pods: client.V1PodList) -> set:
     unhealthy = set()
@@ -349,6 +378,7 @@ async def _poll_loop(interval_s: int) -> None:
     logger.info(f"[agent] Polling started every {interval_s}s. Target backend: {BACKEND_INGEST_URL}")
     Path("/tmp/kubric-heartbeat").touch()
     while True:
+        await _push_state_once()
         await _scan_once()
         await _fetch_and_execute_actions()
         Path("/tmp/kubric-heartbeat").touch()
