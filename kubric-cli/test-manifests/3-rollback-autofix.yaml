@@ -1,0 +1,34 @@
+# Scenario 3: Bad rollout -> rollback_deployment
+# Step 1 - Deploy the healthy baseline:
+#   kubectl apply -f 3-rollback-autofix.yaml
+# Step 2 - Break it (creates a failing revision with history):
+#   kubectl -n kubric-fix-tests set image deployment/rollback-autofix app=nginx:this-tag-does-not-exist-9999
+# Cleanup: kubectl delete -f 3-rollback-autofix.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kubric-fix-tests
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rollback-autofix
+  namespace: kubric-fix-tests
+  annotations:
+    kubernetes.io/change-cause: "revision 1 - known good"
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app: rollback-autofix
+  template:
+    metadata:
+      labels:
+        app: rollback-autofix
+    spec:
+      containers:
+        - name: app
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 80
