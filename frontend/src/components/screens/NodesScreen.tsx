@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { API_BASE } from '@/lib/api';
+import { API_BASE, apiFetch } from '@/lib/api';
 
 interface Node {
   name: string;
@@ -24,7 +24,7 @@ export default function NodesScreen({ selectedCluster }: { selectedCluster: stri
     if (!quiet) setRefreshing(true);
     const context = selectedCluster ? `?context=${encodeURIComponent(selectedCluster)}` : '';
     try {
-      const res = await fetch(`${API_BASE}/nodes${context}`);
+      const res = await apiFetch(`/nodes${context}`);
       if (!res.ok) throw new Error(`Request failed with ${res.status}`);
       const data = await res.json();
       setNodes(data.nodes || []);
