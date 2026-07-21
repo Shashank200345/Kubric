@@ -29,8 +29,6 @@ class KubernetesAIAgent:
         Analyzes Kubernetes evidence and returns a structured diagnosis.
         """
         logger.info("Starting AI reasoning on Kubernetes evidence...")
-        import json
-        logger.info(f"EVIDENCE PAYLOAD: {json.dumps(evidence, indent=2)}")
         
         messages = self.prompt_builder.build_messages(evidence)
         response_text = await self.llm.call_llm(messages)
