@@ -113,7 +113,6 @@ export function Header() {
 					style={{
 						width: '38px',
 						height: '38px',
-						display: 'flex',
 						alignItems: 'center',
 						justifyContent: 'center',
 						background: 'transparent',
