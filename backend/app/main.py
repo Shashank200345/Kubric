@@ -28,10 +28,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register routers
-from app.api.onboarding import router as onboarding_router  # noqa: E402
-app.include_router(onboarding_router)
-
 @app.on_event("startup")
 async def startup_event():
     logger.info("Starting AI Kubernetes Agent backend...")
@@ -187,7 +183,7 @@ async def cli_get_status(cluster: str = "", authorization: Optional[str] = Heade
             health_score = 100  # No pods = nothing unhealthy
         
         # Use real incident count from the detection poller
-        active_incidents = incident_poller.get_active_incident_count(cluster or "minikube")
+        active_incidents = 0  # TODO: wire to real incident tracking
         return {
             "health_score": health_score,
             "active_incidents": active_incidents,
@@ -736,7 +732,7 @@ async def _record_heartbeat(cluster_token: str, user_id: str):
                     step_timestamps[current_step] = now_iso
 
                     # Advance to the next step in the onboarding sequence
-                    from app.models.onboarding import ONBOARDING_STEPS
+                    ONBOARDING_STEPS = ["signup", "connect_cluster", "first_scan", "explore_dashboard"]
                     current_idx = ONBOARDING_STEPS.index(current_step) if current_step in ONBOARDING_STEPS else -1
                     next_step = ONBOARDING_STEPS[current_idx + 1] if current_idx + 1 < len(ONBOARDING_STEPS) else current_step
 
