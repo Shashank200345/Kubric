@@ -110,19 +110,32 @@ export function Header() {
 					onClick={() => setOpen(!open)}
 					className="md:hidden"
 					aria-label={open ? 'Close menu' : 'Open menu'}
+					aria-expanded={open}
 					style={{
-						width: '38px',
-						height: '38px',
+						display: 'flex',
+						width: '40px',
+						height: '40px',
 						alignItems: 'center',
 						justifyContent: 'center',
-						background: 'transparent',
-						border: '1px solid rgba(255,255,255,0.12)',
-						color: open ? '#7cffb2' : 'rgba(255,255,255,0.7)',
+						flexShrink: 0,
+						background: open ? 'rgba(124,255,178,0.1)' : 'rgba(255,255,255,0.03)',
+						border: `1px solid ${open ? 'rgba(124,255,178,0.45)' : 'rgba(255,255,255,0.12)'}`,
+						color: open ? '#7cffb2' : 'rgba(255,255,255,0.75)',
 						cursor: 'pointer',
-						transition: 'color 0.2s ease, border-color 0.2s ease',
+						transition: 'color 0.25s ease, border-color 0.25s ease, background 0.25s ease',
+					}}
+					onMouseEnter={(e) => {
+						if (!open) e.currentTarget.style.color = '#eef2f5';
+						e.currentTarget.style.borderColor = 'rgba(124,255,178,0.45)';
+					}}
+					onMouseLeave={(e) => {
+						if (!open) {
+							e.currentTarget.style.color = 'rgba(255,255,255,0.75)';
+							e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)';
+						}
 					}}
 				>
-					<MenuToggleIcon open={open} className="size-4" duration={300} />
+					<MenuToggleIcon open={open} className="size-5" duration={420} />
 				</button>
 			</nav>
 

@@ -28,8 +28,11 @@ export default function LandingPage() {
 
         <div className="container hero-inner">
           <div className="eyebrow">
-            <span className="dot"></span> Now in public beta — free for clusters
-            under 10 nodes
+            <span className="dot"></span>
+            <span className="eyebrow-full">
+              Now in public beta — free for clusters under 10 nodes
+            </span>
+            <span className="eyebrow-short">Public beta — free under 10 nodes</span>
           </div>
           <h1 className="display">
             Kubernetes troubleshooting,

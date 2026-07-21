@@ -17,6 +17,13 @@
 
   margin: 0;
   padding: 0;
+  width: 100%;
+  max-width: 100%;
+  /* clip any child that spills past the viewport (animated flow diagrams,
+     dashboard showcase, wide grids) so no horizontal scrollbar appears.
+     `clip` (unlike `hidden`) doesn't turn the block into a scroll container,
+     so the sticky header keeps working. */
+  overflow-x: clip;
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
@@ -284,21 +291,30 @@
 .landing .eyebrow {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 7px 14px;
+  gap: 9px;
+  padding: 7px 15px;
   border: 1px solid var(--line-2);
   border-radius: 999px;
   color: var(--muted);
   font-size: 13.5px;
+  line-height: 1;
+  white-space: nowrap;
+  max-width: 100%;
   background: rgba(255, 255, 255, 0.02);
 }
 
 .landing .eyebrow .dot {
   width: 7px;
   height: 7px;
+  flex-shrink: 0;
   border-radius: 50%;
   background: var(--accent);
   box-shadow: 0 0 12px var(--accent);
+}
+
+/* shorter copy variant only shows on small screens */
+.landing .eyebrow-short {
+  display: none;
 }
 
 .landing .display {
@@ -382,8 +398,6 @@
   box-shadow: 0 40px 100px -20px rgba(0, 0, 0, 0.8),
     0 0 0 1px rgba(124, 255, 178, 0.15) inset;
   overflow: hidden;
-}
-.landing .terminal:hover {
 }
 
 .landing .terminal-bar {
@@ -1373,6 +1387,84 @@
   .landing .terminal-body {
     font-size: 12.5px;
     padding: 18px;
+  }
+}
+
+/* ---------- small phones ---------- */
+@media (max-width: 600px) {
+  .landing .container {
+    padding: 0 18px;
+  }
+
+  /* hero sits right under the sticky header — no huge gap */
+  .landing .hero {
+    padding: 56px 0 24px;
+  }
+
+  .landing .hero-inner {
+    padding-bottom: 8px;
+  }
+
+  /* compact single-line pill on phones */
+  .landing .eyebrow {
+    gap: 8px;
+    padding: 6px 13px;
+    font-size: 12px;
+  }
+
+  .landing .eyebrow-full {
+    display: none;
+  }
+
+  .landing .eyebrow-short {
+    display: inline;
+  }
+
+  .landing .lede {
+    font-size: 15px;
+  }
+
+  /* full-width, stacked CTAs that are easy to tap */
+  .landing .hero-cta {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    margin-top: 22px;
+  }
+
+  .landing .hero-cta .btn,
+  .landing .hero-cta .btn-text {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* tighter vertical rhythm so sections don't feel empty on mobile */
+  .landing .section {
+    padding: 64px 0;
+  }
+
+  .landing .section-title {
+    margin-bottom: 34px;
+  }
+
+  .landing .pods-title {
+    margin-bottom: 30px;
+  }
+
+  .landing .pods-head {
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  /* footer: trim the tall watermark reserve so there's less dead space */
+  .landing .footer {
+    padding: 56px 0 120px;
+  }
+
+  .landing .foot-bottom {
+    flex-direction: column;
+    gap: 14px;
+    align-items: flex-start;
   }
 }
 

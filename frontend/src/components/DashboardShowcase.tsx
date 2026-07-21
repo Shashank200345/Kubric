@@ -284,9 +284,25 @@ export default function DashboardShowcase() {
         .kb-showcase .kb-scroll { overflow: hidden; }
         .dsh-swap { animation: dsh-in .5s cubic-bezier(0.22,1,0.36,1); }
         @keyframes dsh-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+        /* ── mobile: scale the full desktop dashboard down so the entire
+           layout fits (incl. the top-bar cluster switcher on the right)
+           instead of being clipped, and shrink the section height. The
+           shell is pre-expanded by 1/scale, then scaled back — so it fills
+           the frame exactly at any phone width. ── */
         @media (max-width: 760px) {
-          .kb-showcase .kb-shell { grid-template-columns: 1fr; height: 460px; }
+          .kb-showcase { height: 336px; }
+          .kb-showcase .kb-shell {
+            grid-template-columns: 1fr;   /* sidebar folds away on mobile */
+            width: 166.667%;              /* 1 / 0.6 */
+            height: 560px;                /* logical height (clipped + faded) */
+            transform: scale(0.6);
+            transform-origin: top left;
+          }
           .kb-showcase .kb-side { display: none; }
+        }
+        @media (max-width: 440px) {
+          .kb-showcase { height: 300px; }
         }
         @media (prefers-reduced-motion: reduce) { .dsh-swap { animation: none; } }
       `}</style>
