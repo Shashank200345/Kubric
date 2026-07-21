@@ -1,54 +1,282 @@
-# AI Kubernetes Troubleshooting Agent
+# Kubric — AI-Powered Kubernetes Troubleshooting Agent
 
-If you've spent any time managing Kubernetes, you know the drill. A deployment goes sideways, and suddenly you're staring at a sea of `CrashLoopBackOff` or `ImagePullBackOff` statuses. 
+Kubric is an autonomous SRE agent that diagnoses Kubernetes cluster failures, pinpoints root causes, and ships fixes — in seconds, not stand-ups. It scans your cluster, reasons over evidence with AI, and can auto-apply safe remediations with one click.
 
-What follows is the tedious, repetitive dance we all do:
-1. `kubectl get pods -n <namespace>`
-2. `kubectl describe pod <pod-name>`
-3. `kubectl logs <pod-name> --previous` (because it crashed before you could catch it)
-4. `kubectl get events --sort-by='.metadata.creationTimestamp'`
-5. Staring at the output, googling the specific error string, and hoping it's just a typo in a config map.
+## What Kubric Does
 
-When things break, the cluster usually tells you exactly what's wrong—it's just buried under layers of JSON, events, and log streams. I built this agent to automate that exact manual discovery process.
+- **Detects** — continuously watches for OOMKills, CrashLoops, ImagePullBackOff, Pending pods, failed rollouts
+- **Diagnoses** — collects pods, logs, events, deployments, and networking state; reasons with GPT-4o-mini to produce a specific, evidence-cited root cause
+- **Fixes** — proposes one of five safe, scoped Kubernetes actions (restart pod, rollback deployment, update resource limits, scale deployment, set env var) and executes it on approval
+- **Explains** — provides symptoms, impact, affected resources, prevention advice, and a conversational drill-down for each incident
 
-## What is this?
+## Architecture
 
-This project is an AI-driven troubleshooting agent that acts like a junior DevOps engineer looking over your shoulder. Instead of manually running a dozen `kubectl` commands to gather context, you click a button. 
+```
+┌───────────────────────────────────────────────────────────────────┐
+│                     KUBRIC PLATFORM                                │
+│                                                                   │
+│  ┌────────────┐      ┌────────────────┐      ┌────────────────┐  │
+│  │  Frontend  │─────▶│    Backend     │─────▶│   InsForge DB  │  │
+│  │  (Next.js) │      │   (FastAPI)    │      │  (PostgreSQL)  │  │
+│  └────────────┘      └────────────────┘      └────────────────┘  │
+│                              ▲                                    │
+└──────────────────────────────┼────────────────────────────────────┘
+                               │ HTTPS (outbound only)
+                    ┌──────────┴──────────┐
+                    │    In-Cluster Agent  │
+                    │  (runs inside your   │
+                    │   Kubernetes cluster)│
+                    └─────────────────────┘
+```
 
-The agent automatically:
-- Scans your cluster for unhealthy pods, failing deployments, and networking issues.
-- Pulls the recent logs (handling edge cases like fetching `--previous` logs if a container died instantly).
-- Aggregates recent warning events.
-- Feeds this structured context to an LLM to diagnose the root cause.
-- Hands you back a human-readable explanation, the exact root cause, and the `kubectl` command to fix it.
+**Key security principle:** the agent communicates outbound only. The backend never reaches into your cluster.
 
-## Architecture & How it Works
+## Tech Stack
 
-I wanted to keep the architecture clean, with a clear separation between the frontend UI, the backend investigation logic, and the state management.
+| Component | Technology |
+|---|---|
+| Frontend | Next.js 16, React 19, Tailwind CSS 4, GSAP |
+| Backend | Python, FastAPI, OpenRouter (GPT-4o-mini) |
+| Agent | Python, kubernetes-client, runs in-cluster |
+| Database | PostgreSQL via InsForge (BaaS) |
+| Auth | InsForge Auth (email + OAuth) |
+| Realtime | InsForge Realtime (WebSocket pub/sub) |
+| CLI | Go (kubric-cli) |
 
-- **Frontend (Next.js / React / Tailwind):** Provides a clean, dark-mode dashboard. When an investigation kicks off, it polls the backend to show you a step-by-step live animation of what the agent is currently doing (Checking Pods -> Reading Logs -> Analyzing Events -> AI Reasoning).
-- **Backend (Python / FastAPI):** The heavy lifter. It uses a custom `KubectlExecutor` to safely run read-only commands against your local kubeconfig. It has dedicated "Inspectors" (Pods, Logs, Events, Network) that gather evidence. 
-- **State & Database (InsForge):** Used as the backend-as-a-service. It handles user auth and stores the history of investigations. As the Python backend runs through its checks, it pushes state updates to an InsForge Postgres database, which the frontend reads to update the UI in real-time.
-- **AI Brain (OpenRouter / GPT-4o-mini):** Once the backend gathers all the evidence, it structures it into a prompt and asks the LLM to figure out what went wrong.
-
-## Running it Locally
+## Quick Start (Local Development)
 
 ### Prerequisites
-- Docker & Docker Compose
-- `kubectl` installed locally and pointing to a valid cluster (like `kind`, `minikube`, or a remote cluster).
-- An OpenRouter API key.
-- An InsForge instance URL and API keys.
 
-### Setup
+- Node.js 20+ and npm
+- Python 3.11+ and pip
+- minikube or kind (local Kubernetes cluster)
+- kubectl configured (`kubectl get nodes` works)
+- An [InsForge](https://insforge.dev) project (free tier works)
+- An [OpenRouter](https://openrouter.ai) API key
 
-1. Copy the `.env` templates to actual `.env` files in `backend/` and `frontend/`.
-2. Spin up the stack:
-   ```bash
-   docker-compose up --build
-   ```
-3. Open `http://localhost:3000` in your browser.
-4. Log in, select your cluster context, and hit **Investigate Cluster**.
+### 1. Clone the repo
 
-## Why take this approach?
+```bash
+git clone https://github.com/Shashank200345/Kubric.git
+cd Kubric
+```
 
-LLMs are great at debugging, but they are completely useless if you don't give them the right context. Trying to copy-paste terminal outputs into ChatGPT is annoying and prone to missing crucial details. By building a tool that programmatically scrapes the exact state of the cluster and feeds it directly to the model, the accuracy of the diagnoses skyrockets. It stops being a chatbot and starts being an actual utility. 
+### 2. Start your local cluster
+
+```bash
+minikube start
+# or: kind create cluster
+
+# Verify:
+kubectl get nodes
+```
+
+### 3. Set up the backend
+
+```bash
+cd backend
+pip install -r requirements.txt
+```
+
+Create `backend/.env`:
+```env
+INSFORGE_URL=https://your-project.region.insforge.app
+INSFORGE_API_KEY=your-insforge-service-key
+OPENROUTER_API_KEY=sk-or-your-key
+OPENROUTER_MODEL=openai/gpt-4o-mini
+KUBRIC_DATA_SOURCE=local
+CORS_ORIGINS=http://localhost:3000
+```
+
+Start the backend:
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+Verify: `http://localhost:8000/health` → `{"status": "healthy"}`
+
+### 4. Set up the frontend
+
+```bash
+cd frontend
+npm install
+```
+
+Create `frontend/.env.local`:
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_INSFORGE_URL=https://your-project.region.insforge.app
+NEXT_PUBLIC_INSFORGE_ANON_KEY=your-insforge-anon-key
+```
+
+Start the frontend:
+```bash
+npm run dev
+```
+
+Open: `http://localhost:3000`
+
+### 5. Sign up and explore
+
+1. Go to `http://localhost:3000/login`
+2. Create an account (email + password)
+3. You'll land on the dashboard showing live cluster state
+
+### 6. Test the auto-fix flow
+
+Deploy a broken workload:
+```bash
+kubectl apply -f kubric-cli/test-manifests/1-oom-autofix.yaml
+```
+
+Wait ~15s for the pod to crash, then:
+1. Go to **Troubleshoot** → select your cluster → **Scan Cluster**
+2. Watch the AI diagnose the OOMKill (90%+ confidence)
+3. Click **Approve & Run Fix** → memory limit gets raised
+4. Pod recovers within 30s
+
+Clean up:
+```bash
+kubectl delete ns kubric-fix-tests
+```
+
+## Test Scenarios
+
+Each scenario tests one of the five auto-fixable actions:
+
+| Manifest | Issue | Expected Action |
+|---|---|---|
+| `1-oom-autofix.yaml` | OOMKilled (50Mi limit, 150Mi usage) | `update_resource_limits` |
+| `2-missing-env-autofix.yaml` | Missing required env var | `update_environment_variable` |
+| `3-rollback-autofix.yaml` | Bad image after rollout | `rollback_deployment` |
+| `4-restart-pod-autofix.yaml` | Transient crash | `restart_pod` |
+| `5-scale-autofix.yaml` | Over-provisioned (Pending pods) | `scale_deployment` |
+
+All manifests are in `kubric-cli/test-manifests/`. Apply one at a time, scan, approve, verify, then delete.
+
+For scenario 3, apply first then break it:
+```bash
+kubectl apply -f kubric-cli/test-manifests/3-rollback-autofix.yaml
+# Wait for pod to be Running, then:
+kubectl -n kubric-fix-tests set image deployment/rollback-autofix app=nginx:this-tag-does-not-exist-9999
+```
+
+## Project Structure
+
+```
+.
+├── frontend/          # Next.js dashboard + landing page
+├── backend/           # FastAPI backend (AI reasoning, API)
+│   └── app/
+│       ├── ai/        # LLM agent, prompts, guardrails
+│       ├── kubernetes/ # Inspectors, executor, service
+│       └── main.py    # All API endpoints
+├── agent/             # In-cluster Python agent
+│   ├── main.py        # Poll loop (detect, push, execute)
+│   └── collector.py   # Cluster state snapshot builder
+├── kubric-cli/        # Go CLI + Helm chart
+│   ├── charts/        # Helm chart for agent deployment
+│   └── test-manifests/ # Auto-fix test scenarios
+├── docs/              # Architecture notes, deployment guide
+└── migrations/        # Database schema (InsForge SQL)
+```
+
+## Push vs Pull Architecture
+
+Kubric supports two data modes controlled by `KUBRIC_DATA_SOURCE`:
+
+- **`local`** (default, for development): the backend runs `kubectl` directly against your kubeconfig. Fast, zero setup.
+- **`agent`** (production): the in-cluster agent pushes cluster state to the backend every 15s. The backend never touches the cluster directly. Secure, multi-tenant, no inbound firewall holes.
+
+See `docs/ARCHITECTURE_push-vs-pull.md` for the full security rationale.
+
+## Running the Agent (Push Mode)
+
+To test the push architecture locally:
+
+1. Generate a cluster token: Dashboard → Settings → Clusters → Generate Token
+2. Run the agent:
+```bash
+cd agent
+pip install -r requirements.txt
+export CLUSTER_TOKEN=<generated-token>
+export INGESTION_ENDPOINT=http://localhost:8000/api/v1/ingest
+export CLUSTER_NAME=minikube
+python main.py
+```
+3. Set `KUBRIC_DATA_SOURCE=agent` in `backend/.env` and restart the backend
+4. The dashboard now reads from pushed snapshots
+
+## Production Deployment
+
+See `docs/DEPLOYMENT_GUIDE.md` for the full guide. Summary:
+
+| Component | Where | How |
+|---|---|---|
+| Frontend | Vercel | Connect repo, root dir = `frontend` |
+| Backend | Railway / Render | Connect repo, root dir = `backend` |
+| Agent | Inside each customer cluster | Helm install |
+
+## Environment Variables
+
+### Backend (`backend/.env`)
+
+| Variable | Description |
+|---|---|
+| `INSFORGE_URL` | Your InsForge project URL |
+| `INSFORGE_API_KEY` | InsForge service/admin key (server-side only) |
+| `OPENROUTER_API_KEY` | OpenRouter API key for AI reasoning |
+| `OPENROUTER_MODEL` | LLM model (default: `openai/gpt-4o-mini`) |
+| `KUBRIC_DATA_SOURCE` | `local` (dev) or `agent` (production) |
+| `CORS_ORIGINS` | Comma-separated allowed frontend origins |
+
+### Frontend (`frontend/.env.local`)
+
+| Variable | Description |
+|---|---|
+| `NEXT_PUBLIC_API_URL` | Backend URL (no trailing slash) |
+| `NEXT_PUBLIC_INSFORGE_URL` | InsForge project URL |
+| `NEXT_PUBLIC_INSFORGE_ANON_KEY` | InsForge public/anon key |
+
+### Agent (environment variables or Helm values)
+
+| Variable | Description |
+|---|---|
+| `INGESTION_ENDPOINT` | Backend ingest URL |
+| `CLUSTER_TOKEN` | Per-cluster auth token |
+| `CLUSTER_NAME` | Human-readable cluster name |
+| `POLL_INTERVAL_SECONDS` | Polling interval (default: 15) |
+
+## Auto-Fix Safety
+
+The agent never applies a fix without explicit user approval. The safety chain:
+
+1. **AI proposes** an action from exactly 5 allowed types
+2. **Deterministic backstop** validates the action matches the root cause category
+3. **LLM plausibility check** confirms the action makes sense
+4. **User approval** — the fix button is shown only when all checks pass
+5. **Execution** — runs with the agent's scoped in-cluster RBAC (not a super-admin)
+6. **Result reporting** — real kubectl output shown to the user (success or failure)
+
+Blocked namespaces (`kube-system`, `kube-public`, `kube-node-lease`) can never be modified.
+
+## Contributing
+
+1. Fork the repo
+2. Create a feature branch
+3. Make your changes
+4. Run `npm run build` in `frontend/` to verify
+5. Submit a PR
+
+Never commit `.env`, `.env.local`, or API keys. The `.gitignore` is configured to prevent this.
+
+## License
+
+MIT
+
+## Links
+
+- [Live Demo](https://kubric.vercel.app)
+- [Documentation](./docs/)
+- [Deployment Guide](./docs/DEPLOYMENT_GUIDE.md)
+- [Architecture](./docs/ARCHITECTURE_push-vs-pull.md)
