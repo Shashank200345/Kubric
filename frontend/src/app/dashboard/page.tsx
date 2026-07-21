@@ -13,9 +13,6 @@ import AskKubricScreen from '@/components/screens/AskKubricScreen';
 import PlaybooksScreen from '@/components/screens/PlaybooksScreen';
 import SettingsScreen from '@/components/screens/SettingsScreen';
 import IncidentDeepDive from '@/components/IncidentDeepDive';
-import { OnboardingWizard } from '@/components/onboarding/OnboardingWizard';
-import { EmptyState } from '@/components/onboarding/EmptyState';
-import { fetchOnboardingState } from '@/components/onboarding/api';
 
 interface ProgressStep {
   id: string;
@@ -103,10 +100,6 @@ export default function Dashboard() {
   const [podsListModalOpen, setPodsListModalOpen] = useState(false);
   const [allPods, setAllPods] = useState<PodRow[]>([]);
   const [podsSearch, setPodsSearch] = useState('');
-
-  // Onboarding state
-  const [showOnboarding, setShowOnboarding] = useState(false);
-  const [onboardingChecked, setOnboardingChecked] = useState(false);
 
   const channelRef = useRef<string | null>(null);
   const clusterMenuRef = useRef<HTMLDivElement>(null);
@@ -333,21 +326,6 @@ export default function Dashboard() {
         setAuthLoading(false);
         fetchHistory();
         fetchClusters();
-        // Check onboarding state independently of clusters so cluster polling
-        // can't race the wizard out of view.
-        (async () => {
-          try {
-            const onboardingState = await fetchOnboardingState();
-            if (onboardingState === null || !onboardingState.is_complete) {
-              // No onboarding record or incomplete — open the Setup section
-              setShowOnboarding(true);
-              setActiveScreen('onboarding');
-            }
-          } catch {
-            // If onboarding check fails, proceed to normal dashboard
-          }
-          setOnboardingChecked(true);
-        })();
       }
     }
 
@@ -451,11 +429,6 @@ export default function Dashboard() {
   const initials = user?.email ? user.email.slice(0, 2).toUpperCase() : 'KB';
 
   const NAV = [
-    ...(showOnboarding ? [{
-      group: 'Get started', items: [
-        { id: 'onboarding', label: 'Setup', icon: '◆' },
-      ],
-    }] : []),
     {
       group: 'Monitor', items: [
         { id: 'overview', label: 'Overview', icon: '▦' },
@@ -610,27 +583,10 @@ export default function Dashboard() {
 
             <div className="kb-scroll" style={(podsListModalOpen || troubleshootModalOpen || cmdkOpen) ? { overflow: 'hidden' } : {}}>
 
-              {/* ============ ONBOARDING (SETUP) ============ */}
-              {activeScreen === 'onboarding' && user && (
-                <div className="kb-screen">
-                  <OnboardingWizard
-                    user={{ id: user.id, email: user.email }}
-                    onComplete={() => {
-                      setShowOnboarding(false);
-                      navigateTo('overview');
-                      fetchClusters();
-                      fetchHistory();
-                    }}
-                  />
-                </div>
-              )}
 
               {/* ============ OVERVIEW ============ */}
               {activeScreen === 'overview' && (
                 <div className="kb-screen">
-                  {clusters.length === 0 ? (
-                    <EmptyState screen="overview" onConnectCluster={() => { setShowOnboarding(true); navigateTo('onboarding'); }} />
-                  ) : (<>
                   <div className="kb-welcome">
                     <div>
                       <h1 className="kb-welcome-title">Welcome back, <span className="accent">{firstName}</span></h1>
@@ -755,7 +711,6 @@ export default function Dashboard() {
                     )}
                   </div>
 
-                  </>)}
                 </div>
               )}
 
@@ -1029,22 +984,22 @@ export default function Dashboard() {
               )}
 
               {/* ============ INCIDENTS ============ */}
-              {activeScreen === 'incidents' && (clusters.length === 0 ? <EmptyState screen="incidents" onConnectCluster={() => { setShowOnboarding(true); navigateTo('onboarding'); }} /> : <IncidentsScreen selectedCluster={selectedCluster} />)}
+              {activeScreen === 'incidents' && <IncidentsScreen selectedCluster={selectedCluster} />}
 
               {/* ============ PR RISK ============ */}
-              {activeScreen === 'prrisk' && (clusters.length === 0 ? <EmptyState screen="prrisk" onConnectCluster={() => { setShowOnboarding(true); navigateTo('onboarding'); }} /> : <PRRiskScreen />)}
+              {activeScreen === 'prrisk' && <PRRiskScreen />}
 
               {/* ============ WORKLOADS ============ */}
-              {activeScreen === 'workloads' && (clusters.length === 0 ? <EmptyState screen="workloads" onConnectCluster={() => { setShowOnboarding(true); navigateTo('onboarding'); }} /> : <WorkloadsScreen selectedCluster={selectedCluster} />)}
+              {activeScreen === 'workloads' && <WorkloadsScreen selectedCluster={selectedCluster} />}
 
               {/* ============ NODES ============ */}
-              {activeScreen === 'nodes' && (clusters.length === 0 ? <EmptyState screen="nodes" onConnectCluster={() => { setShowOnboarding(true); navigateTo('onboarding'); }} /> : <NodesScreen selectedCluster={selectedCluster} />)}
+              {activeScreen === 'nodes' && <NodesScreen selectedCluster={selectedCluster} />}
 
               {/* ============ ASK KUBRIC ============ */}
-              {activeScreen === 'ask' && (clusters.length === 0 ? <EmptyState screen="ask" onConnectCluster={() => { setShowOnboarding(true); navigateTo('onboarding'); }} /> : <AskKubricScreen selectedCluster={selectedCluster} initials={initials} />)}
+              {activeScreen === 'ask' && <AskKubricScreen selectedCluster={selectedCluster} initials={initials} />}
 
               {/* ============ PLAYBOOKS ============ */}
-              {activeScreen === 'playbooks' && (clusters.length === 0 ? <EmptyState screen="playbooks" onConnectCluster={() => { setShowOnboarding(true); navigateTo('onboarding'); }} /> : <PlaybooksScreen />)}
+              {activeScreen === 'playbooks' && <PlaybooksScreen />}
 
               {/* ============ SETTINGS ============ */}
               {activeScreen === 'settings' && <SettingsScreen user={user} selectedCluster={selectedCluster} clusters={clusters} fetchClusters={fetchClusters} />}
