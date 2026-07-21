@@ -106,8 +106,24 @@ export function Header() {
 					</a>
 					<a href="/login" className="btn btn-primary" style={{ fontSize: '13px', padding: '8px 18px' }}>Get Started <span className="arrow">→</span></a>
 				</div>
-				<button onClick={() => setOpen(!open)} className="md:hidden p-2 border border-white/10">
-					<MenuToggleIcon open={open} className="size-5" duration={300} />
+				<button
+					onClick={() => setOpen(!open)}
+					className="md:hidden"
+					aria-label={open ? 'Close menu' : 'Open menu'}
+					style={{
+						width: '38px',
+						height: '38px',
+						display: 'flex',
+						alignItems: 'center',
+						justifyContent: 'center',
+						background: 'transparent',
+						border: '1px solid rgba(255,255,255,0.12)',
+						color: open ? '#7cffb2' : 'rgba(255,255,255,0.7)',
+						cursor: 'pointer',
+						transition: 'color 0.2s ease, border-color 0.2s ease',
+					}}
+				>
+					<MenuToggleIcon open={open} className="size-4" duration={300} />
 				</button>
 			</nav>
 
