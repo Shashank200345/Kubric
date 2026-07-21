@@ -17,10 +17,12 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# Configure CORS
+# Configure CORS — lock to your frontend domain(s) in production
+_ALLOWED_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Adjust this in production
+    allow_origins=[o.strip() for o in _ALLOWED_ORIGINS],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -222,7 +224,7 @@ class AgentIngestRequest(BaseModel):
 async def get_clusters(authorization: Optional[str] = Header(None)):
     if _use_agent_source():
         # Push mode: list clusters that have reported state, scoped to the user.
-        uid = _user_id_from_jwt(authorization)
+        uid = _require_user_in_agent_mode(authorization)
         clusters = await InsForgeClient().list_state_clusters(uid)
         return {"clusters": clusters}
     try:
@@ -251,7 +253,7 @@ async def get_cluster_metrics(context: Optional[str] = None, authorization: Opti
     }
 
     if _use_agent_source():
-        served = await _served_state("metrics", context, _user_id_from_jwt(authorization))
+        served = await _served_state("metrics", context, _require_user_in_agent_mode(authorization))
         return served if served else metrics
 
     try:
@@ -515,6 +517,19 @@ def _use_agent_source() -> bool:
     - 'agent': read endpoints serve the latest snapshot pushed by the in-cluster agent.
     """
     return os.getenv("KUBRIC_DATA_SOURCE", "local").strip().lower() == "agent"
+
+
+def _require_user_in_agent_mode(authorization: Optional[str]) -> Optional[str]:
+    """
+    In agent mode, read endpoints MUST have an authenticated user to scope data.
+    Returns user_id or raises 401.
+    """
+    if not _use_agent_source():
+        return None
+    uid = _user_id_from_jwt(authorization)
+    if not uid:
+        raise HTTPException(status_code=401, detail="Authentication required. Please sign in.")
+    return uid
 
 
 async def _served_state(section: str, context: Optional[str], user_id: Optional[str] = None):
@@ -934,8 +949,6 @@ async def create_action(request: ActionCreateRequest, authorization: Optional[st
 @app.get("/api/v1/actions/pending")
 async def get_pending_actions(authorization: Optional[str] = Header(None)):
     """Agent polls for pending actions to execute."""
-    with open("agent_hits.log", "a") as f:
-        f.write("Agent hit pending endpoint\n")
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
         
@@ -1104,7 +1117,7 @@ async def get_metrics_history():
 async def get_workloads(context: Optional[str] = None, authorization: Optional[str] = Header(None)):
     """Returns real deployments in the cluster with pod/resource status."""
     if _use_agent_source():
-        served = await _served_state("workloads", context, _user_id_from_jwt(authorization))
+        served = await _served_state("workloads", context, _require_user_in_agent_mode(authorization))
         return {"workloads": served or []}
     try:
         deployments_json = KubectlExecutor.run(
@@ -1212,7 +1225,7 @@ async def get_workloads(context: Optional[str] = None, authorization: Optional[s
 async def get_pods(context: Optional[str] = None, authorization: Optional[str] = Header(None)):
     """Returns a list of all pods with their status and metrics."""
     if _use_agent_source():
-        served = await _served_state("pods", context, _user_id_from_jwt(authorization))
+        served = await _served_state("pods", context, _require_user_in_agent_mode(authorization))
         return {"pods": served or []}
     try:
         pods_json = KubectlExecutor.run("kubectl get pods -A -o json", parse_json=True, context=context)
@@ -1271,7 +1284,7 @@ async def get_pods(context: Optional[str] = None, authorization: Optional[str] =
 async def get_nodes(context: Optional[str] = None, authorization: Optional[str] = Header(None)):
     """Returns real node-level status and resource usage."""
     if _use_agent_source():
-        served = await _served_state("nodes", context, _user_id_from_jwt(authorization))
+        served = await _served_state("nodes", context, _require_user_in_agent_mode(authorization))
         return {"nodes": served or []}
     try:
         nodes_json = KubectlExecutor.run("kubectl get nodes -o json", parse_json=True, context=context)
@@ -1326,7 +1339,7 @@ async def get_nodes(context: Optional[str] = None, authorization: Optional[str] 
 async def get_events(context: Optional[str] = None, limit: int = 30, authorization: Optional[str] = Header(None)):
     """Returns recent real Kubernetes events across all namespaces."""
     if _use_agent_source():
-        served = await _served_state("events", context, _user_id_from_jwt(authorization))
+        served = await _served_state("events", context, _require_user_in_agent_mode(authorization))
         return {"events": (served or [])[:limit]}
     try:
         events_json = KubectlExecutor.run("kubectl get events -A -o json", parse_json=True, context=context)
