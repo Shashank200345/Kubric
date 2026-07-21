@@ -498,6 +498,11 @@
   border-top: 1px solid var(--line);
 }
 
+/* hero flows straight into the first section — no divider seam under the nav */
+.landing .hero + .section {
+  border-top: none;
+}
+
 .landing .section.dim {
   background: linear-gradient(180deg, #08160c, #051008);
 }

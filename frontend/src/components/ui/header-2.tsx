@@ -31,9 +31,9 @@ export function Header() {
 	return (
 		<header
 			className={cn(
-				'sticky top-0 z-50 mx-auto w-full max-w-7xl border-b border-transparent md:rounded-md md:border md:transition-all md:ease-out',
+				'sticky top-0 z-50 mx-auto w-full max-w-[1200px] border-0 md:transition-all md:ease-out',
 				{
-					'bg-background/95 supports-[backdrop-filter]:bg-background/50 border-white/10 backdrop-blur-lg md:top-4 md:max-w-5xl md:shadow':
+					'bg-background/95 supports-[backdrop-filter]:bg-background/50 backdrop-blur-lg md:top-4 md:max-w-5xl md:shadow md:rounded-md':
 						scrolled && !open,
 					'bg-background/90': open,
 				},
@@ -41,7 +41,7 @@ export function Header() {
 		>
 			<nav
 				className={cn(
-					'flex h-20 w-full items-center justify-between px-6 md:h-20 md:transition-all md:ease-out mt-2',
+					'flex h-20 w-full items-center justify-between px-7 md:h-20 md:transition-all md:ease-out mt-2',
 					{
 						'md:px-8': scrolled,
 					},
@@ -108,11 +108,10 @@ export function Header() {
 				</div>
 				<button
 					onClick={() => setOpen(!open)}
-					className="md:hidden"
+					className="flex md:hidden"
 					aria-label={open ? 'Close menu' : 'Open menu'}
 					aria-expanded={open}
 					style={{
-						display: 'flex',
 						width: '40px',
 						height: '40px',
 						alignItems: 'center',
