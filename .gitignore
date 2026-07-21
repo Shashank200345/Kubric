@@ -27,3 +27,36 @@ __pycache__/
 .roo
 .trae
 .windsurf
+
+# Recovery / backup artifacts (local-only, not part of the product)
+v2_backups/
+pre_restore_backup/
+*.recovered
+*.recovered2
+
+# Dev scratch files
+scratch*
+out.txt
+out2.txt
+agent_hits.log
+patch.json
+update.sql
+fetch_investigation.py
+container_main.py
+test_action_type.py
+test_fetch.py
+
+# Backend test/utility scripts (not a formal test suite)
+backend/test_*.py
+backend/check_db.py
+backend/extract_files.py
+backend/extract_v2.py
+backend/fix_db.py
+backend/fix_rls.py
+backend/restore_v2.py
+backend/run_migration.py
+backend/out*.txt
+
+# Frontend utility scripts
+frontend/test_insforge.js
+frontend/update_investigation.js
