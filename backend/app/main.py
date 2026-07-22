@@ -201,9 +201,13 @@ from app.kubernetes.service import InvestigationService
 from app.kubernetes.executor import KubectlExecutor, KubectlError, ClusterUnreachableError
 from app.ai.agent import KubernetesAIAgent
 from app.insforge_client import InsForgeClient
+from app.api.onboarding import router as onboarding_router
 from pydantic import BaseModel
 from typing import Optional, Any, Dict
 from fastapi import HTTPException, Header
+
+# Wire the onboarding API (state, cluster-token, invites, heartbeat)
+app.include_router(onboarding_router)
 
 class InvestigationRequest(BaseModel):
     investigation_id: str

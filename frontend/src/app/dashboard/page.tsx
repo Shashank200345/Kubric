@@ -13,6 +13,8 @@ import AskKubricScreen from '@/components/screens/AskKubricScreen';
 import PlaybooksScreen from '@/components/screens/PlaybooksScreen';
 import SettingsScreen from '@/components/screens/SettingsScreen';
 import IncidentDeepDive from '@/components/IncidentDeepDive';
+import { OnboardingWizard } from '@/components/onboarding/OnboardingWizard';
+import { fetchOnboardingState } from '@/components/onboarding/api';
 
 interface ProgressStep {
   id: string;
@@ -76,6 +78,7 @@ export default function Dashboard() {
   const router = useRouter();
   const [user, setUser] = useState<SessionUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   const [investigations, setInvestigations] = useState<Investigation[]>([]);
   const [currentInvestigation, setCurrentInvestigation] = useState<Investigation | null>(null);
@@ -323,6 +326,14 @@ export default function Dashboard() {
         router.push('/login');
       } else {
         setUser(data.user);
+        // Show the onboarding wizard for new or not-yet-finished users.
+        try {
+          const ob = await fetchOnboardingState();
+          if (cancelled) return;
+          if (!ob || !ob.is_complete) setNeedsOnboarding(true);
+        } catch {
+          // Never block the dashboard if the onboarding check fails.
+        }
         setAuthLoading(false);
         fetchHistory();
         fetchClusters();
@@ -459,10 +470,29 @@ export default function Dashboard() {
     setClusterMenuOpen(false);
   };
 
+  const handleOnboardingComplete = () => {
+    setNeedsOnboarding(false);
+    fetchClusters();
+    fetchHistory();
+  };
+
   if (authLoading) {
     return (
       <div className="kb min-h-screen flex items-center justify-center">
         <div className="kb-spinner" />
+        <KubricStyles />
+      </div>
+    );
+  }
+
+  // New / unfinished users go through the guided onboarding wizard first.
+  if (needsOnboarding && user) {
+    return (
+      <div className="kb" style={{ minHeight: '100vh' }}>
+        <OnboardingWizard
+          user={{ id: user.id, email: user.email }}
+          onComplete={handleOnboardingComplete}
+        />
         <KubricStyles />
       </div>
     );
