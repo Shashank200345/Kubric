@@ -278,38 +278,38 @@ async def generate_cluster_token(
             raise HTTPException(status_code=500, detail="Internal server error")
 
         existing = check_resp.json()
-        if existing:
-            raise HTTPException(
-                status_code=409, detail="A cluster with this name already exists"
-            )
+        if existing and existing[0].get("cluster_token"):
+            # Idempotent: this user already registered a cluster with this name,
+            # so return the existing token instead of erroring. This makes the
+            # endpoint safe to call more than once (e.g. React re-renders, retries,
+            # or the user re-entering the onboarding step).
+            cluster_token = existing[0]["cluster_token"]
+        else:
+            # Generate a new cluster token and insert a row into the clusters table
+            cluster_token = str(uuid.uuid4())
+            insert_payload = [
+                {
+                    "user_id": user_id,
+                    "cluster_name": body.cluster_name,
+                    "cluster_token": cluster_token,
+                }
+            ]
 
-        # Generate a new cluster token
-        cluster_token = str(uuid.uuid4())
-
-        # Insert a row into the clusters table
-        insert_payload = [
-            {
-                "user_id": user_id,
-                "cluster_name": body.cluster_name,
-                "cluster_token": cluster_token,
-            }
-        ]
-
-        try:
-            insert_resp = await client.post(
-                f"{insforge_url}/api/database/records/clusters",
-                headers=headers,
-                json=insert_payload,
-            )
-            insert_resp.raise_for_status()
-        except httpx.HTTPStatusError as e:
-            logger.error(
-                f"Failed to insert cluster row: {e.response.status_code} {e.response.text}"
-            )
-            raise HTTPException(status_code=500, detail="Internal server error")
-        except httpx.RequestError as e:
-            logger.error(f"Request error inserting cluster row: {e}")
-            raise HTTPException(status_code=500, detail="Internal server error")
+            try:
+                insert_resp = await client.post(
+                    f"{insforge_url}/api/database/records/clusters",
+                    headers=headers,
+                    json=insert_payload,
+                )
+                insert_resp.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                logger.error(
+                    f"Failed to insert cluster row: {e.response.status_code} {e.response.text}"
+                )
+                raise HTTPException(status_code=500, detail="Internal server error")
+            except httpx.RequestError as e:
+                logger.error(f"Request error inserting cluster row: {e}")
+                raise HTTPException(status_code=500, detail="Internal server error")
 
     # The agent must push to the BACKEND (Railway), not to InsForge. Read the
     # public backend URL from env so it isn't hardcoded; fall back to production.

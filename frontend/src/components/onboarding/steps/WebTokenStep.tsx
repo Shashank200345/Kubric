@@ -22,8 +22,16 @@ export function WebTokenStep({ wizardState, next, back }: StepProps) {
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollingStartRef = useRef<number | null>(null);
+  // Always call the latest `next` without making it an effect dependency
+  // (its identity changes on every wizard re-render).
+  const nextRef = useRef(next);
+  nextRef.current = next;
+  // Guard so the token is generated exactly once, even if the effect re-runs.
+  const startedRef = useRef(false);
 
   useEffect(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
     let cancelled = false;
 
     async function init() {
@@ -52,7 +60,7 @@ export function WebTokenStep({ wizardState, next, back }: StepProps) {
                 clearInterval(intervalRef.current);
                 intervalRef.current = null;
               }
-              next();
+              nextRef.current();
             }
           } catch {
             // Silently ignore heartbeat polling errors
@@ -78,7 +86,9 @@ export function WebTokenStep({ wizardState, next, back }: StepProps) {
         intervalRef.current = null;
       }
     };
-  }, [wizardState.clusterName, next]);
+    // Run once on mount; `next` is read via nextRef to avoid re-running.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleCopy() {
     if (!helmCommand) return;
