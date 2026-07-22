@@ -986,6 +986,23 @@ async def update_action_result(action_id: str, request: ActionResultRequest, aut
     return {"status": "success"}
 
 
+@app.get("/api/v1/actions/{action_id}")
+async def get_action_status(action_id: str, authorization: Optional[str] = Header(None)):
+    """Frontend polls this to learn the result of a dispatched action.
+
+    In agent mode the fix is executed asynchronously by the in-cluster agent,
+    so the UI polls here (JWT-scoped to the user) until status is success/failed.
+    """
+    user_id = _user_id_from_jwt(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    client = InsForgeClient()
+    action = await client.get_action(action_id, user_id)
+    if not action:
+        raise HTTPException(status_code=404, detail="Action not found")
+    return {"id": action_id, "status": action.get("status"), "output": action.get("output")}
+
+
 class ClusterStateRequest(BaseModel):
     cluster_context: Optional[str] = None
     pods: list = []

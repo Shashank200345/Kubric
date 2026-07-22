@@ -212,6 +212,23 @@ class InsForgeClient:
                 logger.error(f"Failed to fetch pending actions: {e}")
                 return []
 
+    async def get_action(self, action_id: str, user_id: str) -> dict | None:
+        """Fetch a single action's status/output, scoped to the owning user."""
+        if not self.url:
+            return None
+        async with httpx.AsyncClient() as client:
+            try:
+                resp = await client.get(
+                    f"{self.base_url}/actions?id=eq.{action_id}&user_id=eq.{user_id}&select=status,output",
+                    headers=self.headers,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                return data[0] if data else None
+            except Exception as e:
+                logger.error(f"Failed to fetch action {action_id}: {e}")
+                return None
+
     async def update_action_result(self, action_id: str, status: str, output: dict) -> bool:
         """Update the status and output of an action."""
         if not self.url:

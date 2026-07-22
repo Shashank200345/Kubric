@@ -304,9 +304,12 @@ export default function Dashboard() {
         setCommandOutput(execOutput || 'The cluster rejected the fix.');
         setCommandStatus('failed');
       } else {
-        // No execution result returned — action was only queued for an in-cluster agent.
-        setCommandOutput('Fix queued. Waiting for the in-cluster agent to execute it.');
+        // Agent mode: the fix was queued for the in-cluster agent to execute.
+        // Poll for the result rather than relying solely on realtime events.
+        setCommandOutput('Fix dispatched to the in-cluster agent…');
         setCommandStatus('pending');
+        const actionId = actionData?.id;
+        if (actionId) pollActionResult(String(actionId), token);
       }
 
     } catch (e: unknown) {
@@ -314,6 +317,39 @@ export default function Dashboard() {
       setError(e instanceof Error ? e.message : 'Failed to dispatch fix to cluster.');
       setCommandStatus('failed');
     }
+  };
+
+  // Poll a dispatched action until the in-cluster agent reports success/failed.
+  const pollActionResult = (actionId: string, token: string) => {
+    const startedAt = Date.now();
+    const TIMEOUT_MS = 120000; // stop after 2 minutes
+    const timer = setInterval(async () => {
+      if (Date.now() - startedAt > TIMEOUT_MS) {
+        clearInterval(timer);
+        return;
+      }
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/actions/${actionId}`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const status = data?.status;
+        if (status === 'success' || status === 'failed') {
+          clearInterval(timer);
+          const out = data?.output;
+          const msg = typeof out === 'string'
+            ? out
+            : (out?.message || out?.error || (out ? JSON.stringify(out) : null));
+          setCommandOutput(
+            msg || (status === 'success' ? 'Fix applied successfully.' : 'The cluster rejected the fix.')
+          );
+          setCommandStatus(status);
+        }
+      } catch {
+        // transient — keep polling until success/failed or timeout
+      }
+    }, 3000);
   };
 
   useEffect(() => {
