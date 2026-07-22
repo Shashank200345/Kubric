@@ -1,9 +1,11 @@
 agent:
   clusterName: ""
-  ingestionEndpoint: "https://api.kubric.dev/v1/ingest"
+  # Must be the FULL backend ingest path. Override with your Railway URL at install:
+  #   --set agent.ingestionEndpoint=https://<your-railway-backend>/api/v1/ingest
+  ingestionEndpoint: "https://api.kubric.dev/api/v1/ingest"
   token: ""
   image:
-    repository: kubric-agent
+    repository: rookie12345/kubric-agent
     tag: "v5"
     pullPolicy: IfNotPresent
 
