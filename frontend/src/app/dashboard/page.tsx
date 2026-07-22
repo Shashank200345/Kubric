@@ -676,7 +676,7 @@ export default function Dashboard() {
                         <span className="kb-col-title">Cluster signal · live</span>
                       </div>
                       <div className="kb-chart-wrap">
-                        <ActivityChart />
+                        <ActivityChart cluster={selectedCluster} />
                       </div>
                     </div>
 
@@ -1182,7 +1182,7 @@ export default function Dashboard() {
 }
 
 /* lightweight illustrative SVG line chart (no dependency) */
-function ActivityChart() {
+function ActivityChart({ cluster }: { cluster: string }) {
   const W = 420, H = 190, PAD_L = 44, PAD_T = 10, PAD_B = 30;
   const plotW = W - PAD_L, plotH = H - PAD_T - PAD_B;
 
@@ -1197,22 +1197,36 @@ function ActivityChart() {
   const [mode, setMode] = useState<'line' | 'bar'>('line');
   const svgRef = useRef<SVGSVGElement>(null);
 
-  // poll history every 10s
+  // Build the time-series client-side from the live /metrics endpoint, which
+  // works in agent (push) mode. The backend /metrics/history relies on local
+  // kubectl and stays empty in production, so we accumulate a rolling window
+  // (last 30 samples) from the same snapshot the rest of the dashboard uses.
   useEffect(() => {
     let active = true;
+    setSamples([]); // reset the window when the selected cluster changes
     const poll = async () => {
       try {
-        const res = await apiFetch('/metrics/history');
+        const ctx = cluster ? `?context=${encodeURIComponent(cluster)}` : '';
+        const res = await apiFetch(`/metrics${ctx}`);
         if (res.ok && active) {
-          const data = await res.json();
-          if (data.samples) setSamples(data.samples);
+          const d = await res.json();
+          setSamples(prev => {
+            const sample: MetricSample = {
+              ts: new Date().toISOString(),
+              cpu_pct: d.cpu_pct ?? 0,
+              memory_pct: d.memory_pct ?? 0,
+              pod_count: d.pod_count ?? 0,
+            };
+            const next = [...prev, sample];
+            return next.length > 30 ? next.slice(next.length - 30) : next;
+          });
         }
-      } catch { /* backend not ready */ }
+      } catch { /* ignore transient errors */ }
     };
     poll();
-    const id = setInterval(poll, 10000);
+    const id = setInterval(poll, 5000);
     return () => { active = false; clearInterval(id); };
-  }, []);
+  }, [cluster]);
 
   const PTS = samples.length || 1;
   const PX = plotW / Math.max(PTS - 1, 1);
