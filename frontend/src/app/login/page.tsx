@@ -105,8 +105,20 @@ export default function LoginPage() {
     setError(null);
     setMessage(null);
     try {
-      const { error } = await insforge.auth.resetPassword({ otp, newPassword });
+      // Code method is two-step: first exchange the emailed 6-digit code for a
+      // short-lived reset token, then reset the password with that token.
+      const { data: exchange, error: exchangeError } =
+        await insforge.auth.exchangeResetPasswordToken({ email, code: otp });
+      if (exchangeError) throw exchangeError;
+
+      const resetToken = exchange?.token;
+      if (!resetToken) {
+        throw new Error('Could not verify the reset code. Please request a new one.');
+      }
+
+      const { error } = await insforge.auth.resetPassword({ otp: resetToken, newPassword });
       if (error) throw error;
+
       // Success — return to the sign-in form with the new password ready to use.
       setResetMode(false);
       setOtp('');
