@@ -15,6 +15,10 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isSignUp, setIsSignUp] = useState(false);
+  // Forgot-password flow: request a reset code, then set a new password.
+  const [forgotMode, setForgotMode] = useState(false);
+  const [resetMode, setResetMode] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,8 +81,68 @@ export default function LoginPage() {
     }
   };
 
-  const heading = showOtp ? 'Verify your email' : isSignUp ? 'Create your account' : 'Welcome back';
-  const sub = showOtp
+  const handleForgotRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const { error } = await insforge.auth.sendResetPasswordEmail({ email });
+      if (error) throw error;
+      setMessage(`We sent a password reset code to ${email}.`);
+      setForgotMode(false);
+      setResetMode(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not send a reset code. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const { error } = await insforge.auth.resetPassword({ otp, newPassword });
+      if (error) throw error;
+      // Success — return to the sign-in form with the new password ready to use.
+      setResetMode(false);
+      setOtp('');
+      setNewPassword('');
+      setPassword('');
+      setMessage('Password reset successfully. Please sign in with your new password.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not reset password. Check the code and try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const exitForgotFlow = () => {
+    setForgotMode(false);
+    setResetMode(false);
+    setOtp('');
+    setNewPassword('');
+    setError(null);
+    setMessage(null);
+  };
+
+  const heading = forgotMode
+    ? 'Reset your password'
+    : resetMode
+    ? 'Set a new password'
+    : showOtp
+    ? 'Verify your email'
+    : isSignUp
+    ? 'Create your account'
+    : 'Welcome back';
+  const sub = forgotMode
+    ? "Enter your email and we'll send you a reset code."
+    : resetMode
+    ? `Enter the code we sent to ${email || 'your inbox'} and choose a new password.`
+    : showOtp
     ? `Enter the 6-digit code we sent to ${email || 'your inbox'}.`
     : isSignUp
     ? 'Start troubleshooting your clusters with AI.'
@@ -110,7 +174,7 @@ export default function LoginPage() {
 
       {/* ── right form panel ── */}
       <main className="au-main">
-        {!showOtp && (
+        {!showOtp && !forgotMode && !resetMode && (
           <button
             type="button"
             className="au-topright"
@@ -130,21 +194,21 @@ export default function LoginPage() {
             <p className="au-sub">{sub}</p>
           </div>
 
-          <form className="au-form" onSubmit={handleAuth}>
+          <form className="au-form" onSubmit={forgotMode ? handleForgotRequest : resetMode ? handleResetPassword : handleAuth}>
             <div className="au-field">
               <label className="au-label">Email address</label>
               <input
                 type="email"
                 required
-                readOnly={showOtp}
+                readOnly={showOtp || resetMode}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@company.com"
-                className={`au-input ${showOtp ? 'is-locked' : ''}`}
+                className={`au-input ${showOtp || resetMode ? 'is-locked' : ''}`}
               />
             </div>
 
-            {!showOtp && (
+            {!showOtp && !forgotMode && !resetMode && (
               <div className="au-field">
                 <label className="au-label">Password</label>
                 <input
@@ -158,16 +222,22 @@ export default function LoginPage() {
               </div>
             )}
 
-            {!showOtp && !isSignUp && (
+            {!showOtp && !isSignUp && !forgotMode && !resetMode && (
               <div className="au-row">
                 <label className="au-remember">
                   <input type="checkbox" defaultChecked /> Remember me
                 </label>
-                <a className="au-forgot" href="#" onClick={(e) => e.preventDefault()}>Forgot?</a>
+                <a
+                  className="au-forgot"
+                  href="#"
+                  onClick={(e) => { e.preventDefault(); setForgotMode(true); setError(null); setMessage(null); }}
+                >
+                  Forgot?
+                </a>
               </div>
             )}
 
-            {showOtp && (
+            {(showOtp || resetMode) && (
               <div className="au-field">
                 <label className="au-label">6-digit code</label>
                 <input
@@ -183,6 +253,20 @@ export default function LoginPage() {
               </div>
             )}
 
+            {resetMode && (
+              <div className="au-field">
+                <label className="au-label">New password</label>
+                <input
+                  type="password"
+                  required
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="au-input"
+                />
+              </div>
+            )}
+
             {error && <div className="au-alert au-alert-err">{error}</div>}
             {message && <div className="au-alert au-alert-ok">{message}</div>}
 
@@ -191,7 +275,15 @@ export default function LoginPage() {
                 <span className="au-spin" />
               ) : (
                 <>
-                  {showOtp ? 'Verify email' : isSignUp ? 'Create account' : 'Sign in'}
+                  {forgotMode
+                    ? 'Send reset code'
+                    : resetMode
+                    ? 'Reset password'
+                    : showOtp
+                    ? 'Verify email'
+                    : isSignUp
+                    ? 'Create account'
+                    : 'Sign in'}
                   <span className="au-arrow">→</span>
                 </>
               )}
@@ -202,9 +294,15 @@ export default function LoginPage() {
                 Cancel verification
               </button>
             )}
+
+            {(forgotMode || resetMode) && (
+              <button type="button" onClick={exitForgotFlow} className="au-ghost">
+                Back to sign in
+              </button>
+            )}
           </form>
 
-          {!showOtp && (
+          {!showOtp && !forgotMode && !resetMode && (
             <>
               <div className="au-divider"><span>or</span></div>
               <p className="au-switch">
