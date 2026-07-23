@@ -2,8 +2,31 @@
 
 import { useState } from 'react';
 import { insforge } from '@/lib/insforge';
+import { API_BASE } from '@/lib/api';
 
 const CATEGORIES = ['Clusters', 'Integrations', 'Trust & Automation', 'Notifications', 'Team', 'API Keys', 'Billing'];
+
+type Shell = 'bash' | 'powershell' | 'cmd';
+
+const SHELLS: { id: Shell; label: string }[] = [
+  { id: 'bash', label: 'macOS / Linux' },
+  { id: 'powershell', label: 'PowerShell' },
+  { id: 'cmd', label: 'Windows CMD' },
+];
+
+/** Reformat a single-line Helm command with the shell's line-continuation char. */
+function formatHelmCommand(cmd: string, shell: Shell): string {
+  if (!cmd) return '';
+  const [head, ...sets] = cmd.split(' --set ');
+  const segments = [head.trim(), ...sets.map((s) => '--set ' + s.trim())];
+  const cont = shell === 'bash' ? ' \\' : shell === 'powershell' ? ' `' : ' ^';
+  return segments.join(cont + '\n  ');
+}
+
+function detectShell(): Shell {
+  if (typeof navigator !== 'undefined' && /Win/i.test(navigator.userAgent)) return 'powershell';
+  return 'bash';
+}
 
 const TRUST_MODES = [
   { id: 'suggest', name: 'Suggest', desc: 'Kubric shows you what to do. You do it. Zero automated actions.' },
@@ -23,6 +46,8 @@ export default function SettingsScreen({ user, selectedCluster, clusters, fetchC
   const [newClusterName, setNewClusterName] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [generatedToken, setGeneratedToken] = useState<string | null>(null);
+  const [shell, setShell] = useState<Shell>(detectShell);
+  const [copied, setCopied] = useState(false);
 
   const toggle = (cat: string) => setEnabledCategories(prev => ({ ...prev, [cat]: !prev[cat] }));
 
@@ -133,19 +158,67 @@ export default function SettingsScreen({ user, selectedCluster, clusters, fetchC
                     </button>
                   </form>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    <div className="kb-explanation" style={{ color: 'var(--green)' }}>✓ Token generated successfully. Run this command to install the agent:</div>
-                    <pre style={{ background: 'var(--bg)', padding: '16px', border: '1px solid var(--green-bd)', color: 'var(--t1)', fontSize: '12px', overflowX: 'auto', lineHeight: '1.6', fontFamily: 'var(--font-jetbrains-mono), monospace' }}>
-{`helm install kubric-agent ./kubric-agent \\
-  -n kubric-system --create-namespace \\
-  --set agent.clusterToken=${generatedToken} \\
-  --set agent.clusterName=${newClusterName} \\
-  --set agent.ingestionEndpoint=https://api.kubric.com/api/v1/ingest`}
-                    </pre>
-                    <button className="kb-btn" style={{ alignSelf: 'flex-start' }} onClick={() => { setGeneratedToken(null); setNewClusterName(''); }}>
-                      Add another cluster
-                    </button>
-                  </div>
+                  (() => {
+                    const baseCmd =
+                      `helm install kubric-agent ./kubric-cli/charts/kubric-agent ` +
+                      `-n kubric-system --create-namespace ` +
+                      `--set agent.token=${generatedToken} ` +
+                      `--set agent.clusterName=${newClusterName} ` +
+                      `--set agent.ingestionEndpoint=${API_BASE}/api/v1/ingest`;
+                    const formatted = formatHelmCommand(baseCmd, shell);
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                        <div className="kb-explanation" style={{ color: 'var(--green)' }}>✓ Token generated successfully. Run this command to install the agent:</div>
+
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          {SHELLS.map(s => {
+                            const active = s.id === shell;
+                            return (
+                              <button
+                                key={s.id}
+                                type="button"
+                                onClick={() => setShell(s.id)}
+                                style={{
+                                  fontFamily: 'var(--font-jetbrains-mono), monospace', fontSize: 10,
+                                  textTransform: 'uppercase', letterSpacing: '0.06em',
+                                  padding: '5px 11px', cursor: 'pointer',
+                                  color: active ? '#05140c' : 'var(--t3)',
+                                  background: active ? 'var(--green)' : 'transparent',
+                                  border: `0.5px solid ${active ? 'var(--green)' : 'var(--bd)'}`,
+                                }}
+                              >
+                                {s.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        <div style={{ position: 'relative' }}>
+                          <pre style={{ background: 'var(--bg)', padding: '16px', border: '1px solid var(--green-bd)', color: 'var(--t1)', fontSize: '12px', overflowX: 'auto', lineHeight: '1.6', fontFamily: 'var(--font-jetbrains-mono), monospace', margin: 0 }}>
+{formatted}
+                          </pre>
+                          <button
+                            className="kb-btn"
+                            type="button"
+                            style={{ position: 'absolute', top: 8, right: 8, fontSize: 11, padding: '4px 10px' }}
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(formatted);
+                                setCopied(true);
+                                setTimeout(() => setCopied(false), 2000);
+                              } catch { /* clipboard unavailable */ }
+                            }}
+                          >
+                            {copied ? 'Copied!' : 'Copy'}
+                          </button>
+                        </div>
+
+                        <button className="kb-btn" style={{ alignSelf: 'flex-start' }} onClick={() => { setGeneratedToken(null); setNewClusterName(''); setCopied(false); }}>
+                          Add another cluster
+                        </button>
+                      </div>
+                    );
+                  })()
                 )}
               </div>
             </div>
