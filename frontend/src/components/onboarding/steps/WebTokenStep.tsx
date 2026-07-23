@@ -13,11 +13,41 @@ import { generateClusterToken, checkHeartbeat } from '../api';
 const POLL_INTERVAL_MS = 5000;
 const TIMEOUT_MS = 300000; // 5 minutes
 
+type Shell = 'bash' | 'powershell' | 'cmd';
+
+const SHELLS: { id: Shell; label: string }[] = [
+  { id: 'bash', label: 'macOS / Linux' },
+  { id: 'powershell', label: 'PowerShell' },
+  { id: 'cmd', label: 'Windows CMD' },
+];
+
+/**
+ * Reformat the single-line Helm command with the correct line-continuation
+ * character for the chosen shell (bash: \, PowerShell: `, cmd: ^) so users can
+ * copy a version that actually runs in their terminal.
+ */
+function formatHelmCommand(cmd: string, shell: Shell): string {
+  if (!cmd) return '';
+  const [head, ...sets] = cmd.split(' --set ');
+  const segments = [head.trim(), ...sets.map((s) => '--set ' + s.trim())];
+  const cont = shell === 'bash' ? ' \\' : shell === 'powershell' ? ' `' : ' ^';
+  return segments.join(cont + '\n  ');
+}
+
+/** Pick a sensible default tab based on the user's OS. */
+function detectShell(): Shell {
+  if (typeof navigator !== 'undefined' && /Win/i.test(navigator.userAgent)) {
+    return 'powershell';
+  }
+  return 'bash';
+}
+
 export function WebTokenStep({ wizardState, next, back }: StepProps) {
   const [helmCommand, setHelmCommand] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [shell, setShell] = useState<Shell>(detectShell);
   const [timedOut, setTimedOut] = useState(false);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -93,7 +123,7 @@ export function WebTokenStep({ wizardState, next, back }: StepProps) {
   async function handleCopy() {
     if (!helmCommand) return;
     try {
-      await navigator.clipboard.writeText(helmCommand);
+      await navigator.clipboard.writeText(formatHelmCommand(helmCommand, shell));
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -131,8 +161,40 @@ export function WebTokenStep({ wizardState, next, back }: StepProps) {
         We&apos;ll detect the connection automatically.
       </p>
 
-      <div className="kbo-code-wrap" style={{ marginTop: 24 }}>
-        <pre className="kbo-code"><code>{helmCommand}</code></pre>
+      {/* Shell selector — pick the syntax that matches your terminal */}
+      <div
+        role="tablist"
+        aria-label="Terminal type"
+        style={{ display: 'flex', gap: 6, marginTop: 24, marginBottom: 10 }}
+      >
+        {SHELLS.map((s) => {
+          const active = s.id === shell;
+          return (
+            <button
+              key={s.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setShell(s.id)}
+              style={{
+                fontFamily: 'inherit',
+                fontSize: 12,
+                padding: '6px 12px',
+                cursor: 'pointer',
+                color: active ? '#05140c' : 'rgba(255,255,255,0.6)',
+                background: active ? '#7cffb2' : 'rgba(255,255,255,0.03)',
+                border: `1px solid ${active ? '#7cffb2' : 'rgba(255,255,255,0.14)'}`,
+                transition: 'all .15s ease',
+              }}
+            >
+              {s.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="kbo-code-wrap">
+        <pre className="kbo-code"><code>{formatHelmCommand(helmCommand || '', shell)}</code></pre>
         <button
           type="button"
           onClick={handleCopy}
