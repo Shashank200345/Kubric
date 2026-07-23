@@ -317,9 +317,9 @@ async def generate_cluster_token(
         "BACKEND_PUBLIC_URL", "https://kubric-production.up.railway.app"
     ).rstrip("/")
 
-    # Build the Helm install command (local chart path + kubric-system namespace).
+    # Install the chart straight from the backend (no repo clone needed).
     helm_command = (
-        f"helm install kubric-agent ./kubric-cli/charts/kubric-agent "
+        f"helm install kubric-agent {backend_url}/install/kubric-agent-0.1.0.tgz "
         f"-n kubric-system --create-namespace "
         f"--set agent.token={cluster_token} "
         f"--set agent.clusterName={body.cluster_name} "

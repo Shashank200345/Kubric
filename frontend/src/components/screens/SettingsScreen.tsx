@@ -160,7 +160,7 @@ export default function SettingsScreen({ user, selectedCluster, clusters, fetchC
                 ) : (
                   (() => {
                     const baseCmd =
-                      `helm install kubric-agent ./kubric-cli/charts/kubric-agent ` +
+                      `helm install kubric-agent ${API_BASE}/install/kubric-agent-0.1.0.tgz ` +
                       `-n kubric-system --create-namespace ` +
                       `--set agent.token=${generatedToken} ` +
                       `--set agent.clusterName=${newClusterName} ` +

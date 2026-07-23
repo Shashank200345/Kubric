@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import httpx
 from fastapi import FastAPI, BackgroundTasks, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from loguru import logger
 from dotenv import load_dotenv
 
@@ -27,6 +28,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve the packaged Helm chart so anyone can install the agent WITHOUT cloning
+# the repo, e.g.:  helm install kubric-agent <backend>/install/kubric-agent-0.1.0.tgz ...
+_STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+if os.path.isdir(_STATIC_DIR):
+    app.mount("/install", StaticFiles(directory=_STATIC_DIR), name="install")
 
 @app.on_event("startup")
 async def startup_event():
