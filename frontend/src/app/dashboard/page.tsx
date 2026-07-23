@@ -451,10 +451,12 @@ export default function Dashboard() {
   // while still signed in should ask for confirmation instead of navigating away.
   useEffect(() => {
     if (authLoading || needsOnboarding) return;
-    window.history.pushState(null, '', window.location.href);
+    // Capture the dashboard URL now; on popstate window.location has already
+    // moved to the previous page, so we must re-push THIS url to stay put.
+    const guardUrl = window.location.href;
+    window.history.pushState(null, '', guardUrl);
     const onPopState = () => {
-      // Re-assert our history entry so we stay put, then prompt the user.
-      window.history.pushState(null, '', window.location.href);
+      window.history.pushState(null, '', guardUrl);
       setShowExitConfirm(true);
     };
     window.addEventListener('popstate', onPopState);
