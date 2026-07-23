@@ -26,6 +26,10 @@ export function Header() {
 			label: 'Integrations',
 			href: '#ecosystem',
 		},
+		{
+			label: 'Docs',
+			href: '/docs',
+		},
 	];
 
 	return (

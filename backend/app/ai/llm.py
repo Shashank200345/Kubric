@@ -58,3 +58,59 @@ class OpenRouterClient:
         except Exception as e:
             logger.error(f"Unexpected error when calling LLM: {e}")
             return None
+
+    async def call_with_tools(
+        self,
+        messages: list,
+        tools: Optional[list] = None,
+        force_json: bool = False,
+        temperature: float = 0.0,
+        timeout: float = 45.0,
+    ) -> Optional[Dict[str, Any]]:
+        """Tool-calling chat completion for the ReAct loop.
+
+        Returns the raw assistant message dict (may contain `tool_calls`) plus
+        token usage, or None on failure. Kept separate from call_llm so the
+        existing one-shot JSON path is untouched.
+        """
+        if not self.api_key:
+            return None
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "HTTP-Referer": "http://localhost:8000",
+            "X-Title": "AI Kubernetes Agent",
+            "Content-Type": "application/json",
+        }
+
+        payload: Dict[str, Any] = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": temperature,
+        }
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"
+        if force_json:
+            payload["response_format"] = {"type": "json_object"}
+
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.post(self.BASE_URL, headers=headers, json=payload)
+                response.raise_for_status()
+                data = response.json()
+                choice = data["choices"][0]
+                return {
+                    "message": choice["message"],
+                    "finish_reason": choice.get("finish_reason"),
+                    "usage": data.get("usage", {}),
+                }
+        except httpx.HTTPStatusError as e:
+            logger.error(f"HTTP error from OpenRouter (tools): {e.response.text}")
+            return None
+        except httpx.RequestError as e:
+            logger.error(f"Request failed to OpenRouter (tools): {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error when calling LLM (tools): {e}")
+            return None

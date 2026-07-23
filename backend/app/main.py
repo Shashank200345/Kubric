@@ -640,9 +640,20 @@ async def investigate_cluster(request: InvestigationRequest, authorization: Opti
             service = InvestigationService(client=client)
             investigation_data = await service.run_investigation(active_id, request.cluster_context)
 
-        # 2. AI Reasoning
-        ai_agent = KubernetesAIAgent()
-        diagnosis = await ai_agent.analyze(investigation_data)
+        # 2. AI Reasoning — one-shot analyzer (default) or the agentic ReAct loop.
+        reasoning_mode = os.getenv("KUBRIC_REASONING_MODE", "oneshot").strip().lower()
+        if reasoning_mode == "react":
+            from app.ai.agent_loop import ReActDiagnosisAgent
+            from app.ai.tools import LiveKubectlTools, SnapshotTools
+            if _use_agent_source():
+                snapshot = await client.get_cluster_state(request.cluster_context, user_id=user_id) or {}
+                provider = SnapshotTools(snapshot)
+            else:
+                provider = LiveKubectlTools(request.cluster_context)
+            diagnosis = await ReActDiagnosisAgent().diagnose(provider, investigation_data)
+        else:
+            ai_agent = KubernetesAIAgent()
+            diagnosis = await ai_agent.analyze(investigation_data)
 
         # 3. Save Final Diagnosis
         if active_id:

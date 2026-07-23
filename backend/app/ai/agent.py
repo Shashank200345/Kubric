@@ -41,49 +41,57 @@ class KubernetesAIAgent:
         
         try:
             diagnosis = json.loads(cleaned_json)
-            
-            # Auto-Fix Guardrails
-            suggested_action = diagnosis.get("suggested_action")
-            diagnosis["kubectl_command"] = ""
-            
-            if suggested_action:
-                action_type = suggested_action.get("action_type")
-                root_cause = diagnosis.get("root_cause", "")
-                
-                # Layer 1: Deterministic Backstop
-                if not self._passes_deterministic_backstop(root_cause, action_type):
-                    logger.warning(f"Action {action_type} failed deterministic backstop for root cause: {root_cause}")
-                    diagnosis["suggested_action"] = None
-                else:
-                    # Layer 2: LLM Consistency Check
-                    is_plausible = await self._validate_action_plausibility_llm(root_cause, action_type)
-                    if not is_plausible:
-                        logger.warning(f"Action {action_type} failed LLM plausibility check for root cause: {root_cause}")
-                        diagnosis["suggested_action"] = None
-                    else:
-                        # Success: Generate deterministic kubectl command
-                        diagnosis["kubectl_command"] = self._generate_safe_kubectl_command(
-                            action_type, 
-                            suggested_action.get("params", {})
-                        )
-
-            # Deterministic fallback: if the LLM produced no usable action but the
-            # evidence clearly matches a known, fixable pattern, infer the action
-            # ourselves so the user still gets an Approve & Run Fix option.
-            if not diagnosis.get("suggested_action"):
-                inferred = self._infer_action_from_evidence(diagnosis.get("root_cause", ""), evidence)
-                if inferred:
-                    logger.info(f"Inferred fallback action: {inferred['action_type']}")
-                    diagnosis["suggested_action"] = inferred
-                    diagnosis["kubectl_command"] = self._generate_safe_kubectl_command(
-                        inferred["action_type"], inferred["params"]
-                    )
-
-            return diagnosis
+            return await self.finalize_diagnosis(diagnosis, evidence)
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse LLM response as JSON: {e}")
             logger.debug(f"Raw response: {response_text}")
             return self._fallback_diagnosis()
+
+    async def finalize_diagnosis(self, diagnosis: Dict[str, Any], evidence: Dict[str, Any]) -> Dict[str, Any]:
+        """Validate the model's suggested_action and attach a safe kubectl command.
+
+        Shared by the one-shot analyzer and the ReAct loop so both paths get the
+        same guardrails: deterministic backstop -> LLM plausibility -> deterministic
+        command generation, with a rule-based inference fallback.
+        """
+        # Auto-Fix Guardrails
+        suggested_action = diagnosis.get("suggested_action")
+        diagnosis["kubectl_command"] = ""
+
+        if suggested_action:
+            action_type = suggested_action.get("action_type")
+            root_cause = diagnosis.get("root_cause", "")
+
+            # Layer 1: Deterministic Backstop
+            if not self._passes_deterministic_backstop(root_cause, action_type):
+                logger.warning(f"Action {action_type} failed deterministic backstop for root cause: {root_cause}")
+                diagnosis["suggested_action"] = None
+            else:
+                # Layer 2: LLM Consistency Check
+                is_plausible = await self._validate_action_plausibility_llm(root_cause, action_type)
+                if not is_plausible:
+                    logger.warning(f"Action {action_type} failed LLM plausibility check for root cause: {root_cause}")
+                    diagnosis["suggested_action"] = None
+                else:
+                    # Success: Generate deterministic kubectl command
+                    diagnosis["kubectl_command"] = self._generate_safe_kubectl_command(
+                        action_type,
+                        suggested_action.get("params", {})
+                    )
+
+        # Deterministic fallback: if the LLM produced no usable action but the
+        # evidence clearly matches a known, fixable pattern, infer the action
+        # ourselves so the user still gets an Approve & Run Fix option.
+        if not diagnosis.get("suggested_action"):
+            inferred = self._infer_action_from_evidence(diagnosis.get("root_cause", ""), evidence)
+            if inferred:
+                logger.info(f"Inferred fallback action: {inferred['action_type']}")
+                diagnosis["suggested_action"] = inferred
+                diagnosis["kubectl_command"] = self._generate_safe_kubectl_command(
+                    inferred["action_type"], inferred["params"]
+                )
+
+        return diagnosis
             
     def _fallback_diagnosis(self) -> Dict[str, Any]:
         """Fallback returned if the LLM fails or errors out."""

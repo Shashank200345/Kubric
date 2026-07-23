@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crash-demo
+  namespace: default
+  labels:
+    app: crash-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: crash-demo
+  template:
+    metadata:
+      labels:
+        app: crash-demo
+    spec:
+      containers:
+        - name: app
+          image: busybox:1.36
+          # Starts, prints, then exits with an error — Kubernetes keeps
+          # restarting it, producing CrashLoopBackOff for the agent to detect.
+          command: ["/bin/sh", "-c"]
+          args:
+            - "echo 'crash-demo starting...'; sleep 3; echo 'fatal: simulated crash'; exit 1"
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "16Mi"
+            limits:
+              cpu: "50m"
+              memory: "32Mi"
