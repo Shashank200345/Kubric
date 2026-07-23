@@ -94,6 +94,7 @@ export default function Dashboard() {
   const [cmdkOpen, setCmdkOpen] = useState(false);
   const [clusterMenuOpen, setClusterMenuOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
 
   const [liveMetrics, setLiveMetrics] = useState({ cpu_pct: 0, memory_pct: 0, disk_pct: 0, network_pct: 0, node_count: 0, pod_count: 0 });
 
@@ -445,6 +446,25 @@ export default function Dashboard() {
       window.removeEventListener('pointerdown', handlePointerDown);
     };
   }, []);
+
+  // Guard the browser Back button: leaving the dashboard for the landing page
+  // while still signed in should ask for confirmation instead of navigating away.
+  useEffect(() => {
+    if (authLoading || needsOnboarding) return;
+    window.history.pushState(null, '', window.location.href);
+    const onPopState = () => {
+      // Re-assert our history entry so we stay put, then prompt the user.
+      window.history.pushState(null, '', window.location.href);
+      setShowExitConfirm(true);
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [authLoading, needsOnboarding]);
+
+  const confirmExit = () => {
+    setShowExitConfirm(false);
+    router.push('/');
+  };
 
   const handleSignOut = async () => {
     if (channelRef.current) insforge.realtime.unsubscribe(channelRef.current);
@@ -1202,6 +1222,28 @@ export default function Dashboard() {
             </div>
             <div className="kb-modal-footer">
               <button className="kb-btn" style={{ width: '100%' }} onClick={() => setTroubleshootModalOpen(false)}>Done</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Exit-to-landing confirmation (fires on browser Back while signed in) */}
+      {showExitConfirm && (
+        <div className="kb-modal-backdrop" onClick={() => setShowExitConfirm(false)}>
+          <div className="kb-modal" style={{ width: '440px', maxWidth: '90vw' }} onClick={e => e.stopPropagation()}>
+            <div className="kb-modal-header">
+              <h2 className="kb-modal-title">Leave the dashboard?</h2>
+              <button className="kb-modal-close" onClick={() => setShowExitConfirm(false)} aria-label="Close">×</button>
+            </div>
+            <div className="kb-modal-body">
+              <p style={{ color: 'var(--t2)', fontSize: '14px', lineHeight: 1.6, margin: 0 }}>
+                You&apos;re still signed in. Do you want to exit to the landing page? Your
+                session stays active — use <strong style={{ color: 'var(--t1)' }}>Sign out</strong> to fully log out.
+              </p>
+            </div>
+            <div className="kb-modal-footer">
+              <button className="kb-btn" onClick={() => setShowExitConfirm(false)}>Stay on dashboard</button>
+              <button className="kb-btn primary" onClick={confirmExit}>Exit to landing</button>
             </div>
           </div>
         </div>
