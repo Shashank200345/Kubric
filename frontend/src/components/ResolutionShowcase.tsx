@@ -49,7 +49,7 @@ const INCIDENTS: { tag: string; lines: Line[] }[] = [
 
 // w = target width %, dur = fill time (s) — more time → longer + slower
 const BENCH = [
-  { label: 'Kubric', time: '0:34', w: 18, dur: 0.8, best: true },
+  { label: 'Kubric (target)', time: '<5:00', w: 18, dur: 0.8, best: true },
   { label: 'Manual triage', time: '9:12', w: 52, dur: 1.1 },
   { label: 'Runbook lookup', time: '14:30', w: 74, dur: 1.3 },
   { label: 'On-call escalation', time: '22:05', w: 96, dur: 1.5 },
@@ -271,8 +271,8 @@ export default function ResolutionShowcase() {
         </div>
         <figcaption className="rs-cap">
           <span className="rs-eyebrow">Built for speed</span>
-          <h3>Minutes of triage, down to seconds.</h3>
-          <p>Parallel inspectors and grounded reasoning collapse the path from alert to root cause — no paging, no runbook hunt.</p>
+          <h3>Minutes of triage, collapsed.</h3>
+          <p>Parallel inspectors and grounded reasoning shorten the path from alert to root cause. Comparison is illustrative — the Kubric time is a target, not a measured benchmark.</p>
         </figcaption>
       </figure>
     </div>
