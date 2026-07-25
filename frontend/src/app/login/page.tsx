@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { insforge } from '@/lib/insforge';
@@ -20,6 +20,21 @@ export default function LoginPage() {
   const [forgotMode, setForgotMode] = useState(false);
   const [resetMode, setResetMode] = useState(false);
   const [newPassword, setNewPassword] = useState('');
+
+  // If the visitor is already signed in (e.g. hit Back into /login after the
+  // exit-confirm, or opened /login in a fresh tab), send them to the dashboard
+  // instead of showing the form in a confusing signed-in state. Skip while an
+  // OAuth callback is being processed on this URL.
+  useEffect(() => {
+    let cancelled = false;
+    const hasOAuthParams = typeof window !== 'undefined' && /[?&](code|state)=/.test(window.location.search);
+    if (hasOAuthParams) return;
+    (async () => {
+      const { data } = await insforge.auth.getCurrentUser();
+      if (!cancelled && data?.user) router.replace('/dashboard');
+    })();
+    return () => { cancelled = true; };
+  }, [router]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();

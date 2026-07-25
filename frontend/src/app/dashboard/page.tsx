@@ -450,10 +450,18 @@ export default function Dashboard() {
   // Guard the browser Back button: leaving the dashboard for the landing page
   // while still signed in should ask for confirmation instead of navigating away.
   useEffect(() => {
-    if (authLoading || needsOnboarding) return;
-    // Capture the dashboard URL now; on popstate window.location has already
-    // moved to the previous page, so we must re-push THIS url to stay put.
-    const guardUrl = window.location.href;
+    // Install once the user is authenticated. Do NOT gate on needsOnboarding —
+    // otherwise Back during onboarding escapes the guard entirely.
+    if (authLoading || !user) return;
+
+    // Always guard a CLEAN path. After a Google/OAuth redirect the URL is
+    // `/dashboard?code=...&state=...`; guarding the raw href would let the Back
+    // handler re-push a stale OAuth code, which poisons the next session
+    // exchange and breaks login/logout. Strip any query/hash first.
+    const guardUrl = window.location.pathname;
+    if (window.location.search || window.location.hash) {
+      try { window.history.replaceState(null, '', guardUrl); } catch { /* noop */ }
+    }
     window.history.pushState(null, '', guardUrl);
     const onPopState = () => {
       window.history.pushState(null, '', guardUrl);
@@ -461,7 +469,7 @@ export default function Dashboard() {
     };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
-  }, [authLoading, needsOnboarding]);
+  }, [authLoading, user]);
 
   const confirmExit = () => {
     setShowExitConfirm(false);
