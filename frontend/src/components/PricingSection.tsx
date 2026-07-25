@@ -10,9 +10,10 @@ const TIERS = [
     desc: '1 cluster, up to 10 nodes. Suggest mode only. Every engineer should be able to try Kubric on a real cluster with zero friction.',
     cta: 'Start free',
     features: [
-      '50 PR risk assessments / month',
+      'AI incident diagnosis',
       '7-day incident history',
       'Suggest mode only',
+      'PR risk assessments (coming soon)',
       'Community support',
     ],
   },
