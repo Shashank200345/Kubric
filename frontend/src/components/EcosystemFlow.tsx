@@ -51,7 +51,7 @@ const LINES = [
   { id: 'l-out2', group: 2,  d: roundedPath([[782, 374], [1024, 374]]) },
 ];
 
-const FEATURES_LEFT = ['OOM Detection', 'Crash Diagnosis', 'Pre-deploy PR Risk'];
+const FEATURES_LEFT = ['OOM Detection', 'Crash Diagnosis', 'Auto-Remediation'];
 const FEATURES_RIGHT = ['Event Triage', 'Root Cause AI'];
 
 /* ---- Kubernetes ecosystem logos (monochrome, currentColor) ---- */
