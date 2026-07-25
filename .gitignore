@@ -38,6 +38,10 @@ scratch*
 out.txt
 out2.txt
 agent_hits.log
+logs.*.json
+
+# Large media exports (not part of the app; assets live in frontend/public)
+KUBRIC_logo_transforming_animation_*.mp4
 patch.json
 update.sql
 fetch_investigation.py
