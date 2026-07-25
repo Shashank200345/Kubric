@@ -9,6 +9,21 @@ Kubric is an autonomous SRE agent that diagnoses Kubernetes cluster failures, pi
 - **Fixes** — proposes one of five safe, scoped Kubernetes actions (restart pod, rollback deployment, update resource limits, scale deployment, set env var) and executes it on approval
 - **Explains** — provides symptoms, impact, affected resources, prevention advice, and a conversational drill-down for each incident
 
+## Status & roadmap
+
+Kubric is in active development. To set expectations honestly:
+
+**Working today**
+- Push-based in-cluster agent (Helm-installed), state ingestion, and the dashboard
+- AI incident detection + diagnosis (one-shot, and an opt-in agentic ReAct reasoning loop)
+- One-click remediation for five action types (see [Auto-Fix Safety](#auto-fix-safety))
+- Onboarding wizard, per-shell install command, and a docs page (`/docs`)
+
+**On the roadmap (not yet built)**
+- **Pre-deploy PR risk** (GitHub App, diff analysis, PR comments) — surfaced in the UI as a preview labeled "Coming soon"
+- **SOC 2** — designed for readiness; certification is planned, not yet obtained
+- Auto-fix (autonomous) mode with policy guardrails and rollback-on-regression
+
 ## Architecture
 
 ```
@@ -190,6 +205,13 @@ Kubric supports two data modes controlled by `KUBRIC_DATA_SOURCE`:
 
 See `docs/ARCHITECTURE_push-vs-pull.md` for the full security rationale.
 
+## Reasoning Modes
+
+The diagnosis engine has two modes, controlled by `KUBRIC_REASONING_MODE`:
+
+- **`oneshot`** (default): a single LLM call reasons over a fixed evidence bundle and returns a diagnosis. Fast and predictable.
+- **`react`**: an agentic, **read-only** ReAct loop. The model calls read-only tools (`list_pods`, `describe_pod`, `get_pod_logs`, `list_events`, `list_deployments`, `list_nodes`) to gather exactly the evidence it needs and follow the cause across resources (multi-hop root cause). It's bounded (iteration + tool-call budget + timeout), runs tool calls concurrently, caches results, and always falls back to `oneshot` on any failure. It never mutates the cluster — remediation still requires approval. Both backends (`local` kubectl and `agent` snapshot) are supported.
+
 ## Running the Agent (Push Mode)
 
 To test the push architecture locally:
@@ -206,6 +228,20 @@ python main.py
 ```
 3. Set `KUBRIC_DATA_SOURCE=agent` in `backend/.env` and restart the backend
 4. The dashboard now reads from pushed snapshots
+
+### Installing the agent in a real cluster (Helm, no clone)
+
+The Helm chart is served by the backend, so end users don't need to clone the repo:
+
+```bash
+helm install kubric-agent https://<your-backend>/install/kubric-agent-0.1.0.tgz \
+  -n kubric-system --create-namespace \
+  --set agent.token=<token-from-dashboard> \
+  --set agent.clusterName=<cluster-name> \
+  --set agent.ingestionEndpoint=https://<your-backend>/api/v1/ingest
+```
+
+The onboarding wizard and **Settings → Clusters** generate this command pre-filled and formatted for your shell (macOS/Linux, PowerShell, or Windows CMD). The agent image must be pullable by the cluster (public registry), and `metrics-server` is recommended for CPU/memory metrics.
 
 ## Production Deployment
 
@@ -227,7 +263,9 @@ See `docs/DEPLOYMENT_GUIDE.md` for the full guide. Summary:
 | `INSFORGE_API_KEY` | InsForge service/admin key (server-side only) |
 | `OPENROUTER_API_KEY` | OpenRouter API key for AI reasoning |
 | `OPENROUTER_MODEL` | LLM model (default: `openai/gpt-4o-mini`) |
-| `KUBRIC_DATA_SOURCE` | `local` (dev) or `agent` (production) |
+| `KUBRIC_DATA_SOURCE` | `local` (dev, uses kubectl) or `agent` (production, uses pushed snapshots) |
+| `KUBRIC_REASONING_MODE` | `oneshot` (default, single-shot analysis) or `react` (agentic read-only tool loop) |
+| `BACKEND_PUBLIC_URL` | Public backend URL, used to build the agent install command |
 | `CORS_ORIGINS` | Comma-separated allowed frontend origins |
 
 ### Frontend (`frontend/.env.local`)
