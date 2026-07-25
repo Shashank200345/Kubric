@@ -9,9 +9,24 @@ import './docs.css';
  * Drop a real capture at /public/docs/<file> and it renders automatically;
  * until then it shows a labeled placeholder describing what to capture.
  */
-function Shot({ file, alt, caption, window: win }: { file: string; alt: string; caption?: string; window?: string }) {
+function Shot({ file, src: srcProp, alt, caption, window: win }: { file?: string; src?: string; alt: string; caption?: string; window?: string }) {
   const [ok, setOk] = useState(true);
-  const src = `/docs/${file}`;
+  const [zoomed, setZoomed] = useState(false);
+  const src = srcProp || `/docs/${file}`;
+
+  // lock body scroll + allow Esc to close while zoomed
+  useEffect(() => {
+    if (!zoomed) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setZoomed(false); };
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [zoomed]);
+
   return (
     <figure className="docs-shot">
       <div className="docs-shot-frame">
@@ -23,16 +38,31 @@ function Shot({ file, alt, caption, window: win }: { file: string; alt: string; 
         )}
         {ok ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={src} alt={alt} onError={() => setOk(false)} />
+          <img
+            src={src}
+            alt={alt}
+            className="docs-shot-img"
+            onClick={() => setZoomed(true)}
+            onError={() => setOk(false)}
+          />
         ) : (
           <>
             <span className="docs-shot-badge">screenshot</span>
-            <span className="docs-shot-hint">{`public/docs/${file}`}</span>
+            <span className="docs-shot-hint">{srcProp ? `public${srcProp}` : `public/docs/${file}`}</span>
             <span className="docs-shot-hint" style={{ opacity: 0.7 }}>{alt}</span>
           </>
         )}
       </div>
       {caption && <figcaption className="docs-shot-cap">{caption}</figcaption>}
+
+      {zoomed && ok && (
+        <div className="docs-lightbox" role="dialog" aria-modal="true" aria-label={alt} onClick={() => setZoomed(false)}>
+          <button className="docs-lightbox-close" aria-label="Close" onClick={() => setZoomed(false)}>×</button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={src} alt={alt} onClick={(e) => e.stopPropagation()} />
+          {caption && <div className="docs-lightbox-cap">{caption}</div>}
+        </div>
+      )}
     </figure>
   );
 }
@@ -53,6 +83,14 @@ const NAV = [
       { id: 'wizard', label: 'Onboarding wizard' },
       { id: 'connect', label: 'Connect a cluster' },
       { id: 'trust', label: 'Trust modes' },
+    ],
+  },
+  {
+    group: 'Managed clusters',
+    items: [
+      { id: 'managed', label: 'EKS / GKE / AKS' },
+      { id: 'managed-fargate', label: 'EKS Fargate (important)' },
+      { id: 'managed-checklist', label: 'Pre-flight checklist' },
     ],
   },
   {
@@ -148,7 +186,7 @@ function DocsContent() {
           with AI, and ships fixes — with you in control. This guide takes you from sign-up to your
           first one-click fix.
         </p>
-        <Shot file="hero-dashboard.png" window="app.kubric.dev/dashboard" alt="Dashboard Overview: connected cluster, live metrics, incident count" caption="The Kubric dashboard once a cluster is connected." />
+        <Shot src="/hero-dashboard.png" window="app.kubric.dev/dashboard" alt="Dashboard Overview: connected cluster, live metrics, incident count" caption="The Kubric dashboard once a cluster is connected." />
         <p>
           Kubric is <strong>push-based</strong>: a lightweight agent runs inside your cluster,
           collects state over outbound HTTPS, and Kubric reasons over it. Kubric never needs
@@ -206,7 +244,7 @@ function DocsContent() {
       <section id="signup">
         <h2 className="docs-h2">Create your account</h2>
         <p>Sign up with email + password (verified by a 6-digit code) or with Google/GitHub. Forgot your password? Use the <strong>Forgot?</strong> link — we email a reset code, then you set a new password.</p>
-        <Shot file="signup.png" window="app.kubric.dev/login" alt="Sign-up / login screen with brand panel on the left and form on the right" caption="Sign up or sign in to reach your workspace." />
+        <Shot src="/signup.png" window="app.kubric.dev/login" alt="Sign-up / login screen with brand panel on the left and form on the right" caption="Sign up or sign in to reach your workspace." />
       </section>
 
       {/* ---------------- Wizard ---------------- */}
@@ -222,14 +260,19 @@ function DocsContent() {
           <li><h4>Invite your team (optional)</h4><p>Add teammates by email, or skip.</p></li>
           <li><h4>Awaiting first scan → done</h4><p>Once data arrives you get a summary and a “Go to dashboard” button.</p></li>
         </ol>
-        <Shot file="wizard.png" window="app.kubric.dev/dashboard" alt="Onboarding wizard: left progress tracker (Welcome, Name Your Cluster, Choose Connection Method, Connect via Web Token, Select Trust Mode, Invite Team, Awaiting First Scan, Setup Complete) and the active step on the right" caption="The guided onboarding wizard with its progress tracker." />
+        <div className="docs-shot-grid">
+          <Shot file="onboarding-1.png" window="app.kubric.dev/dashboard" alt="Onboarding wizard — first step, with the progress tracker on the left" caption="Step 1 — getting started in the guided wizard." />
+          <Shot file="onboarding-2.png" window="app.kubric.dev/dashboard" alt="Onboarding wizard — naming the cluster / choosing a connection method" caption="Step 2 — name your cluster and choose how to connect." />
+          <Shot file="onboarding-3.png" window="app.kubric.dev/dashboard" alt="Onboarding wizard — connecting the cluster / selecting a trust mode" caption="Step 3 — connect the cluster and pick a trust mode." />
+          <Shot file="onboarding-4.png" window="app.kubric.dev/dashboard" alt="Onboarding wizard — awaiting first scan / setup complete" caption="Step 4 — first data arrives and setup completes." />
+        </div>
       </section>
 
       {/* ---------------- Connect a cluster ---------------- */}
       <section id="connect">
         <h2 className="docs-h2">Connect a cluster</h2>
         <p>On the Web Token step, Kubric generates a per-cluster token and a ready-to-run Helm command. Pick the tab that matches your terminal — the command is formatted for <strong>macOS/Linux</strong>, <strong>PowerShell</strong>, or <strong>Windows CMD</strong> so it pastes and runs cleanly.</p>
-        <Shot file="web-token.png" window="app.kubric.dev/dashboard" alt="Web Token step: token generated, shell tabs (macOS/Linux, PowerShell, Windows CMD), the Helm command, and a Copy button" caption="Generate a token and copy the Helm command for your shell." />
+        <Shot file="onboarding-4.png" window="app.kubric.dev/dashboard" alt="Web Token step: token generated, shell tabs (macOS/Linux, PowerShell, Windows CMD), the Helm command, and a Copy button" caption="Generate a token and copy the Helm command for your shell." />
         <h3 className="docs-h3">Verify the agent is running</h3>
         <pre className="docs-code">{`kubectl -n kubric-system get pods
 kubectl -n kubric-system logs -l app=kubric-agent --tail=20`}</pre>
@@ -238,6 +281,9 @@ kubectl -n kubric-system logs -l app=kubric-agent --tail=20`}</pre>
           <div className="t">Two common gotchas</div>
           <p>1) The agent image must be pullable by your cluster (public registry). 2) For CPU/memory numbers, install metrics-server. Neither blocks incident detection or fixes.</p>
         </div>
+
+        <h3 className="docs-h3">Using a managed cloud cluster (EKS / GKE / AKS)?</h3>
+        <p>The agent runs on any conformant cluster — nothing is minikube-specific — but managed clusters have a few extra requirements (kubeconfig, metrics-server, node scheduling, and <strong>Fargate profiles on EKS</strong>). We&apos;ve put those in their own section so nothing bites you mid-install: see <a href="#managed">Managed clusters →</a>.</p>
       </section>
 
       {/* ---------------- Trust modes ---------------- */}
@@ -250,6 +296,213 @@ kubectl -n kubric-system logs -l app=kubric-agent --tail=20`}</pre>
             <tr><td><strong>Suggest</strong></td><td>Kubric shows the diagnosis and recommended fix. You run it yourself. Zero automated actions.</td></tr>
             <tr><td><strong>Approve</strong> <span className="docs-pill">default</span></td><td>Kubric prepares the fix and waits for your one-click approval before the in-cluster agent applies it.</td></tr>
             <tr><td><strong>Auto-fix</strong></td><td>Kubric remediates defined issue categories automatically, within the boundaries you set.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      {/* ---------------- Managed clusters ---------------- */}
+      <section id="managed">
+        <h2 className="docs-h2">Managed Kubernetes (EKS / GKE / AKS)</h2>
+        <p>
+          The Kubric agent is a single lightweight pod, so it runs on <strong>any</strong> conformant
+          cluster with no code changes. Managed cloud clusters just add a few environment concerns
+          that a local minikube never has. Work through this section once and the install is a single
+          Helm command — the same one shown in the wizard.
+        </p>
+        <div className="docs-note warn">
+          <div className="t">Read this if your pod is stuck in <span className="docs-inline">Pending</span></div>
+          <p>On managed clusters, <strong>99% of failed installs are scheduling problems, not Kubric problems</strong> — the agent image is fine, but the cluster has nowhere to place the pod. The two usual causes are <strong>EKS Fargate profiles</strong> and <strong>node pod-capacity limits</strong>, both covered below. Always start by reading the scheduler&apos;s own reason:</p>
+          <pre className="docs-code">{`kubectl -n kubric-system describe pod -l app=kubric-agent
+# scroll to Events: → look for the FailedScheduling message`}</pre>
+        </div>
+
+        <h3 className="docs-h3">1 · Point kubectl &amp; helm at the right cluster</h3>
+        <pre className="docs-code">{`# EKS
+aws eks update-kubeconfig --name <cluster-name> --region <region>
+
+# GKE
+gcloud container clusters get-credentials <cluster-name> --region <region>
+
+# AKS
+az aks get-credentials --resource-group <rg> --name <cluster-name>
+
+# confirm you're on the intended cluster
+kubectl config current-context
+kubectl get nodes`}</pre>
+        <p>Every command below acts on whatever <span className="docs-inline">current-context</span> points at — double-check it before installing so you don&apos;t connect the wrong cluster.</p>
+
+        <h3 className="docs-h3">2 · Install metrics-server (for CPU / memory)</h3>
+        <p>Managed clusters don&apos;t bundle metrics-server the way minikube does. Without it, CPU/memory read <span className="docs-inline">0</span> in the dashboard — incidents and fixes still work, but you lose the resource meters.</p>
+        <pre className="docs-code">{`kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+kubectl top nodes   # should return numbers within a minute`}</pre>
+        <p>EKS/GKE/AKS kubelet certificates are valid, so you normally do <strong>not</strong> need the <span className="docs-inline">--kubelet-insecure-tls</span> flag that local clusters sometimes require.</p>
+
+        <h3 className="docs-h3">3 · Match the image to your node architecture</h3>
+        <p>The default agent image is <strong>linux/amd64</strong>, which is correct for standard x86 node groups. On <strong>AWS Graviton / arm64</strong> nodes, either use an arm64 (or multi-arch) image, or schedule the agent onto an x86 node. An architecture mismatch shows up as <span className="docs-inline">exec format error</span> in the pod logs.</p>
+
+        <h3 className="docs-h3">4 · Confirm outbound egress</h3>
+        <p>The agent only makes <strong>outbound</strong> HTTPS calls, so no inbound firewall changes are needed — but the nodes must be able to reach the Kubric backend. That means a NAT gateway (for private subnets) or public subnets. Fully air-gapped clusters with no egress can&apos;t push data.</p>
+
+        <h3 className="docs-h3">5 · Install the agent</h3>
+        <p>Same cluster-agnostic command as the wizard / Settings:</p>
+        <pre className="docs-code">{`helm install kubric-agent https://<your-backend>/install/kubric-agent-0.1.0.tgz \\
+  -n kubric-system --create-namespace \\
+  --set agent.token=<token> \\
+  --set agent.clusterName=production-eks \\
+  --set agent.ingestionEndpoint=https://<your-backend>/api/v1/ingest`}</pre>
+        <div className="docs-note">
+          <div className="t">Private registries (ECR / GAR / ACR)</div>
+          <p>For production you can push the agent image to your own registry and set <span className="docs-inline">--set agent.image.repository=&lt;your-repo&gt;</span>. If the repo is private, add an image pull secret to the <span className="docs-inline">kubric-system</span> namespace so the pod can pull it.</p>
+        </div>
+
+        <h3 className="docs-h3">Full EKS walkthrough — every command, in order</h3>
+        <p>Copy-paste this top to bottom on your local machine. Replace the <span className="docs-inline">&lt;placeholders&gt;</span>. Commands are grouped; the comments explain what each one is for.</p>
+        <pre className="docs-code">{`# ── 0. Confirm your local tools are installed ─────────────────────────
+aws --version           # AWS CLI v2
+kubectl version --client
+helm version
+
+# ── 1. Authenticate to AWS (skip if already configured) ───────────────
+aws configure            # enter Access Key, Secret, default region
+aws sts get-caller-identity   # confirm you're the right IAM identity
+
+# ── 2. Point kubectl at your EKS cluster ──────────────────────────────
+aws eks list-clusters --region <region>            # find the name
+aws eks update-kubeconfig --name <cluster-name> --region <region>
+kubectl config current-context                     # sanity check
+kubectl get nodes -o wide                          # nodes should be Ready
+
+# ── 3. Detect Fargate BEFORE installing ───────────────────────────────
+#   If any node name starts with "fargate-ip-", it's a Fargate cluster
+#   → do section "EKS Fargate clusters" first, then come back to step 5.
+kubectl get nodes -o wide
+
+# ── 4. Install metrics-server (for CPU / memory in the dashboard) ─────
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+kubectl -n kube-system rollout status deployment metrics-server
+kubectl top nodes        # should return numbers within ~1 min
+
+# ── 5. Install the Kubric agent ───────────────────────────────────────
+helm install kubric-agent https://<your-backend>/install/kubric-agent-0.1.0.tgz \\
+  -n kubric-system --create-namespace \\
+  --set agent.token=<token> \\
+  --set agent.clusterName=production-eks \\
+  --set agent.ingestionEndpoint=https://<your-backend>/api/v1/ingest
+
+# ── 6. Watch it come up ───────────────────────────────────────────────
+kubectl -n kubric-system get pods -w      # wait for Running (Ctrl+C to stop)
+kubectl -n kubric-system logs -l app=kubric-agent --tail=30
+#   You want log lines like: [agent] Pushed cluster state ... 200
+
+# ── 7. Confirm in the dashboard ───────────────────────────────────────
+#   The cluster appears within ~30s. Done.`}</pre>
+
+        <div className="docs-note">
+          <div className="t">If the pod is Pending</div>
+          <p>Don&apos;t guess — read the scheduler&apos;s reason, then jump to the matching row in the <a href="#managed-checklist">pre-flight checklist</a>:</p>
+          <pre className="docs-code">{`kubectl -n kubric-system describe pod -l app=kubric-agent
+# scroll to Events: → the FailedScheduling line names the exact cause`}</pre>
+        </div>
+
+        <h3 className="docs-h3">Useful day-2 commands</h3>
+        <pre className="docs-code">{`# Restart the agent (e.g. after adding a Fargate profile)
+kubectl -n kubric-system rollout restart deployment kubric-agent
+
+# Update to a newer chart / change a value
+helm upgrade kubric-agent https://<your-backend>/install/kubric-agent-0.1.0.tgz \\
+  -n kubric-system --reuse-values
+
+# See what Helm has installed
+helm -n kubric-system list
+
+# Fully remove the agent
+helm uninstall kubric-agent -n kubric-system
+kubectl delete namespace kubric-system`}</pre>
+        <div className="docs-note warn">
+          <div className="t">Heads-up on <span className="docs-inline">--reuse-values</span></div>
+          <p><span className="docs-inline">helm upgrade --reuse-values</span> keeps your old values but <strong>ignores new chart defaults</strong>. If an upgrade adds a new default you need, pass it explicitly with <span className="docs-inline">--set</span>, or drop <span className="docs-inline">--reuse-values</span> and re-supply your <span className="docs-inline">--set</span> flags.</p>
+        </div>
+        <p><strong>GKE / AKS:</strong> only step 2 changes — use <span className="docs-inline">gcloud container clusters get-credentials &lt;name&gt; --region &lt;region&gt;</span> or <span className="docs-inline">az aks get-credentials --resource-group &lt;rg&gt; --name &lt;name&gt;</span>. Steps 0 and 3–7 are identical, and neither GKE nor AKS has the Fargate step.</p>
+      </section>
+
+      {/* ---------------- EKS Fargate ---------------- */}
+      <section id="managed-fargate">
+        <h2 className="docs-h2">EKS Fargate clusters (important)</h2>
+        <p>
+          If your EKS cluster runs on <strong>Fargate</strong> — including &quot;Fargate-only&quot; clusters
+          with no EC2 managed node group — the agent will sit in <span className="docs-inline">Pending</span> forever
+          unless you do one extra step. This is the single most common reason a managed install
+          &quot;doesn&apos;t work&quot;, so it gets its own section.
+        </p>
+
+        <h3 className="docs-h3">Why it happens</h3>
+        <p>
+          On Fargate, AWS provisions a right-sized micro-VM (a &quot;node&quot;) <strong>per pod</strong>, and it
+          only does so for pods that match a <strong>Fargate profile</strong> (matched by namespace, and
+          optionally labels). The Kubric agent installs into the <span className="docs-inline">kubric-system</span> namespace.
+          If no Fargate profile selects that namespace, AWS never creates a node for the pod, and it
+          stays unschedulable. You&apos;ll see this in the events:
+        </p>
+        <pre className="docs-code">{`# Every node is fargate-ip-... with Capacity: pods: 1, and:
+Warning  FailedScheduling  ...  0/N nodes are available: N Too many pods.`}</pre>
+        <p>Two tells confirm it&apos;s Fargate: node names start with <span className="docs-inline">fargate-ip-</span>, and each node reports <span className="docs-inline">Capacity: pods: 1</span> (a Fargate node hosts exactly one pod).</p>
+
+        <h3 className="docs-h3">The fix — create a Fargate profile for the namespace</h3>
+        <p>Reuse the pod-execution role and subnets from a profile you already have:</p>
+        <pre className="docs-code">{`# 1. See existing profiles
+aws eks list-fargate-profiles --cluster-name <cluster-name>
+
+# 2. Grab the podExecutionRoleArn + subnets from one of them
+aws eks describe-fargate-profile --cluster-name <cluster-name> \\
+  --fargate-profile-name <existing-profile-name>
+
+# 3. Create a profile that selects the kubric-system namespace
+aws eks create-fargate-profile \\
+  --cluster-name <cluster-name> \\
+  --fargate-profile-name kubric-system \\
+  --pod-execution-role-arn <podExecutionRoleArn-from-step-2> \\
+  --subnets <subnet-1> <subnet-2> \\
+  --selectors namespace=kubric-system`}</pre>
+        <p>Prefer the console? <strong>EKS → your cluster → Compute → Fargate profiles → Add Fargate profile</strong>. Name it <span className="docs-inline">kubric-system</span>, pick the existing pod-execution role and private subnets, and add a selector with <strong>Namespace = <span className="docs-inline">kubric-system</span></strong> (leave labels blank).</p>
+        <p>Profile creation takes ~1–2 minutes. Once it&apos;s <span className="docs-inline">ACTIVE</span>, restart the deployment so the pod re-schedules onto a freshly provisioned Fargate node:</p>
+        <pre className="docs-code">{`kubectl -n kubric-system rollout restart deployment kubric-agent
+kubectl -n kubric-system get pods -w   # Pending → Running in ~60–90s`}</pre>
+        <div className="docs-note">
+          <div className="t">Order tip</div>
+          <p>Cleanest sequence: create the <span className="docs-inline">kubric-system</span> Fargate profile <em>first</em>, then run <span className="docs-inline">helm install</span>. If you already installed and it&apos;s Pending, just add the profile and <span className="docs-inline">rollout restart</span> — no reinstall needed.</p>
+        </div>
+        <div className="docs-note warn">
+          <div className="t">Fargate sizing &amp; cold start</div>
+          <p>Fargate rounds every pod up to a minimum of <strong>0.25 vCPU / 0.5 GB</strong>, so the agent&apos;s tiny requests still bill at that floor. Expect a <strong>~60–90s cold start</strong> per Fargate pod versus seconds on EC2. Neither affects functionality.</p>
+        </div>
+      </section>
+
+      {/* ---------------- Pre-flight checklist ---------------- */}
+      <section id="managed-checklist">
+        <h2 className="docs-h2">Managed cluster pre-flight checklist</h2>
+        <p>Run through this before <span className="docs-inline">helm install</span> and the agent should come up <span className="docs-inline">Running</span> on the first try:</p>
+        <table className="docs-table">
+          <thead><tr><th>Check</th><th>Command / action</th></tr></thead>
+          <tbody>
+            <tr><td>Right cluster selected</td><td><span className="docs-inline">kubectl config current-context</span></td></tr>
+            <tr><td>Nodes are Ready</td><td><span className="docs-inline">kubectl get nodes</span></td></tr>
+            <tr><td>Is it Fargate?</td><td>Node names start with <span className="docs-inline">fargate-ip-</span> → create a <span className="docs-inline">kubric-system</span> Fargate profile <em>first</em></td></tr>
+            <tr><td>Room to schedule (EC2 nodes)</td><td><span className="docs-inline">kubectl describe nodes</span> → a node with free pod capacity; if all show &quot;Too many pods&quot;, add a node</td></tr>
+            <tr><td>metrics-server installed</td><td><span className="docs-inline">kubectl top nodes</span> returns numbers</td></tr>
+            <tr><td>Node architecture</td><td>amd64 image on x86 nodes; arm64/multi-arch on Graviton</td></tr>
+            <tr><td>Outbound HTTPS egress</td><td>NAT gateway or public subnets can reach the backend</td></tr>
+          </tbody>
+        </table>
+        <h3 className="docs-h3">Still Pending? Read the scheduler, don&apos;t guess</h3>
+        <p>The events section names the exact cause. Common ones on managed clusters:</p>
+        <table className="docs-table">
+          <thead><tr><th>Message</th><th>Cause &amp; fix</th></tr></thead>
+          <tbody>
+            <tr><td><span className="docs-inline">Too many pods</span> (nodes are <span className="docs-inline">fargate-ip-</span>)</td><td>Fargate-only cluster, no profile for the namespace → create a <span className="docs-inline">kubric-system</span> Fargate profile.</td></tr>
+            <tr><td><span className="docs-inline">Too many pods</span> (EC2 nodes, all full)</td><td>Every node hit its max-pods-per-node cap → add a node to the group, or free a slot.</td></tr>
+            <tr><td><span className="docs-inline">Insufficient cpu / memory</span></td><td>Nodes are out of allocatable resources → scale the node group up.</td></tr>
+            <tr><td><span className="docs-inline">had untolerated taint</span></td><td>Nodes are tainted → the chart tolerates any taint by default; ensure you&apos;re on the current chart, or add a matching toleration.</td></tr>
+            <tr><td><span className="docs-inline">didn&apos;t match node affinity/selector</span></td><td>A nodeSelector/affinity mismatch → clear or correct the selector.</td></tr>
           </tbody>
         </table>
       </section>
@@ -351,6 +604,8 @@ kubectl -n kubric-system logs -l app=kubric-agent --tail=20`}</pre>
         <p>metrics-server isn’t serving data. Enable it (<span className="docs-inline">minikube addons enable metrics-server</span>) and confirm <span className="docs-inline">kubectl top nodes</span> returns numbers. Everything else works without it.</p>
         <h3 className="docs-h3">A deleted cluster still shows in the dashboard</h3>
         <p>The dashboard serves the last snapshot the agent pushed. Remove the agent and its stored state to clear it. Data goes stale when the agent stops reporting.</p>
+        <h3 className="docs-h3">The agent pod is stuck in Pending on EKS</h3>
+        <p>Almost always a scheduling issue, not a Kubric issue. If your nodes are named <span className="docs-inline">fargate-ip-…</span>, it&apos;s a Fargate-only cluster and you need a Fargate profile for the <span className="docs-inline">kubric-system</span> namespace — see <a href="#managed-fargate">EKS Fargate clusters</a>. If they&apos;re EC2 nodes reporting &quot;Too many pods&quot;, they&apos;ve hit their pod-capacity cap — add a node. Always check <span className="docs-inline">kubectl -n kubric-system describe pod -l app=kubric-agent</span> first.</p>
         <h3 className="docs-h3">“helm: path not found”</h3>
         <p>Use the exact command from the dashboard — it installs the chart from a URL, so you don’t need the project checked out locally.</p>
         <div className="docs-note">
