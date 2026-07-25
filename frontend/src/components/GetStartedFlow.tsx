@@ -25,7 +25,7 @@ const STEPS = [
   {
     tag: 'STEP 03',
     title: 'Ship the fix',
-    desc: 'Approve the patch. Kubric applies it, then verifies the workload recovers. MTTR in seconds.',
+    desc: 'Approve the patch. Kubric applies it, then verifies the workload recovers.',
   },
 ];
 
