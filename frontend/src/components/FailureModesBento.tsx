@@ -98,7 +98,7 @@ export default function FailureModesBento() {
               ))}
               <span className="fb-tl-line" />
             </div>
-            <div className="fb-tl-foot">MTTR 42s · autonomous</div>
+            <div className="fb-tl-foot">Detect → fix → verify · autonomous</div>
           </div>
         </div>
       </div>
@@ -128,11 +128,14 @@ export default function FailureModesBento() {
         </div>
       </div>
 
-      {/* ── Row 2 · Card 6 — Pre-deploy PR risk ── */}
+      {/* ── Row 2 · Card 6 — Pre-deploy PR risk (roadmap) ── */}
       <div className="fb-card">
-        <div className="fb-label">PR Risk</div>
+        <div className="fb-label">
+          PR Risk
+          <span style={{ marginLeft: 8, fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#ffb86b', border: '1px solid rgba(255,184,107,0.45)', padding: '2px 6px' }}>Coming soon</span>
+        </div>
         <h3 className="fb-title">Pre-deploy PR risk</h3>
-        <p className="fb-desc">Kubric checks the diff against live P95 usage and flags what will break — before merge.</p>
+        <p className="fb-desc">On the roadmap: Kubric will check a diff against live usage and flag what could break — before merge. Illustrative preview.</p>
         <div className="fb-panel">
           <div className="fb-phead">PR #247 · payment-svc <span className="fb-risk">risk: high</span></div>
           <div className="fb-scrub">
