@@ -16,6 +16,18 @@ spec:
         app: kubric-agent
     spec:
       serviceAccountName: kubric-agent
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: kubric-agent
           image: "{{ .Values.agent.image.repository }}:{{ .Values.agent.image.tag }}"

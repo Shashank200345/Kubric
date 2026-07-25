@@ -16,3 +16,14 @@ resources:
   limits:
     cpu: "100m"
     memory: "256Mi"
+
+# Scheduling — the agent is a single lightweight pod that just needs to land
+# somewhere. By default it tolerates any node taint so it schedules on clusters
+# whose nodes are tainted (common on EKS/managed node groups). Override to pin
+# it to specific nodes.
+tolerations:
+  - operator: Exists
+
+nodeSelector: {}
+
+affinity: {}
