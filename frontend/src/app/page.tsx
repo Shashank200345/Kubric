@@ -121,7 +121,7 @@ export default function LandingPage() {
                   { k: "Inference", v: "Parallel" },
                   { k: "Throughput", v: "1000s pods" },
                   { k: "Grounding", v: "Live state" },
-                  { k: "Models", v: "Ensemble" },
+                  { k: "Model", v: "GPT-4o-mini" },
                 ],
                 note: "Parallel inference over your telemetry, with answers grounded in the real state of the cluster — never a hallucinated guess.",
                 deploy: "See it run",
@@ -136,10 +136,10 @@ export default function LandingPage() {
                   { k: "Clusters", v: "Unlimited" },
                   { k: "Clouds", v: "Any" },
                   { k: "Regions", v: "Global" },
-                  { k: "Agents", v: "Zero" },
+                  { k: "Agent", v: "1 per cluster" },
                   { k: "Routing", v: "Real-time" },
                 ],
-                note: "No agents to babysit, no quotas to plan. One control plane spans every cluster across every cloud and region.",
+                note: "One lightweight agent per cluster, installed with a single Helm command — no per-node daemons to babysit. One control plane spans every cluster across every cloud and region.",
                 deploy: "Connect a fleet",
               },
               {
@@ -150,12 +150,12 @@ export default function LandingPage() {
                 cmd: "$ kubric audit incident-4821",
                 fields: [
                   { k: "Audit", v: "Full trail" },
-                  { k: "Compliance", v: "SOC 2" },
+                  { k: "Compliance", v: "SOC 2 (planned)" },
                   { k: "Access", v: "Read-only" },
                   { k: "Fixes", v: "On approval" },
                   { k: "Evidence", v: "Linked" },
                 ],
-                note: "SOC 2 Type II, read-only by default, fix-on-approval. Every claim links back to the log line or metric behind it.",
+                note: "Designed for SOC 2 readiness (certification planned). Read-only by default, fix-on-approval. Every claim links back to the log line or metric behind it.",
                 deploy: "Review the trail",
               },
             ].map((row) => (
@@ -219,7 +219,7 @@ export default function LandingPage() {
           <div className="pods-head">
             <span className="pods-head-label"><span className="sq" /> Capabilities</span>
             <span className="pods-head-line" />
-            <span className="pods-head-count">6 modes</span>
+            <span className="pods-head-count">5 live · 1 soon</span>
           </div>
           <h2 className="pods-title">
             Resolve any <em>failure mode.</em>
@@ -259,10 +259,10 @@ export default function LandingPage() {
           </div>
           <div className="split-grid">
             <div className="mini">
-              <h5>Live diagnosis</h5>
+              <h5>Automatic diagnosis</h5>
               <p>
-                Streaming RCA the moment alerts fire — no ticket triage in
-                between.
+                Root-cause analysis within seconds of detection — no ticket
+                triage in between.
               </p>
             </div>
             <div className="mini">
@@ -275,70 +275,20 @@ export default function LandingPage() {
             <div className="mini">
               <h5>Safe actions</h5>
               <p>
-                Dry‑run by default. Kubric proposes; humans (or your policy)
-                approve.
+                Kubric proposes; humans approve. Blocked system namespaces,
+                a fixed safe action set, and multi-layer validation.
               </p>
             </div>
             <div className="mini">
-              <h5>Runbooks that learn</h5>
+              <h5>Full audit trail</h5>
               <p>
-                Past incidents become institutional memory — Kubric remembers
-                your cluster.
+                Every investigation, diagnosis, and fix is stored with
+                timestamps and evidence — reviewable any time.
               </p>
             </div>
           </div>
         </div>
       </section>
-
-      {/* PRODUCT SECTION 2 */}
-      <section className="section dim">
-        <div className="container split reverse">
-          <div className="split-copy">
-            <h2 className="section-title left">
-              Designed for <em style={{ fontStyle: 'italic', color: '#7cffb2' }}>platform teams.</em>
-            </h2>
-            <p className="muted">
-              Whether you operate a single GKE cluster or a fleet of EKS
-              regions, Kubric slots into your existing stack — Prometheus, Loki,
-              Datadog, OpenTelemetry, Argo, Flux — without rip‑and‑replace.
-            </p>
-            <a className="link-arrow" href="#ecosystem">
-              See integrations →
-            </a>
-          </div>
-          <div className="split-grid">
-            <div className="mini">
-              <h5>Multi‑cluster</h5>
-              <p>
-                One control plane, every cluster. Drill from fleet view to pod
-                logs in two clicks.
-              </p>
-            </div>
-            <div className="mini">
-              <h5>GitOps native</h5>
-              <p>
-                Fixes ship as PRs to your manifests — reviewed, merged, rolled
-                out.
-              </p>
-            </div>
-            <div className="mini">
-              <h5>Policy guardrails</h5>
-              <p>
-                Define what Kubric can touch. Namespaces, verbs, blast radius —
-                all configurable.
-              </p>
-            </div>
-            <div className="mini">
-              <h5>BYO models</h5>
-              <p>
-                Use Kubric‑hosted models, your own OpenAI/Anthropic keys, or
-                self‑hosted Llama.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
 
       {/* ECOSYSTEM — plugs into your stack */}
       <section className="section" id="ecosystem">
