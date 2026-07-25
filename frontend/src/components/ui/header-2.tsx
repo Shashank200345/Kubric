@@ -84,6 +84,7 @@ export function Header() {
 								textDecoration: 'none',
 								transition: 'color .2s ease',
 								letterSpacing: '-0.01em',
+								whiteSpace: 'nowrap',
 							}}
 							onMouseEnter={(e) => (e.currentTarget.style.color = '#7cffb2')}
 							onMouseLeave={(e) => (e.currentTarget.style.color = 'rgba(255,255,255,0.65)')}
