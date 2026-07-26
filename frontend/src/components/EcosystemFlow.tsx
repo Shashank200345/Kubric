@@ -180,13 +180,21 @@ export default function EcosystemFlow() {
           backdrop-filter: blur(18px) saturate(150%); -webkit-backdrop-filter: blur(18px) saturate(150%);
           box-shadow: 0 30px 80px -28px rgba(0,0,0,0.8), 0 0 70px -18px rgba(124,255,178,0.45), inset 0 0 0 1px rgba(255,255,255,0.04);
         }
-        .eco-brand { display: flex; align-items: center; justify-content: center; gap: 0.9cqw; margin-bottom: 1.5cqw; }
-        .eco-brand-mark {
-          width: 1.9cqw; height: 1.9cqw; border-radius: 0.6cqw;
-          background: conic-gradient(from 210deg, #7cffb2, #2fae6e, #7cffb2);
-          box-shadow: 0 0 16px rgba(124,255,178,0.5);
+        /* brand lockup — matches the navbar (logo mark + KUBRIC wordmark) */
+        .eco-brand { display: flex; align-items: center; justify-content: center; gap: 0.15cqw; margin-bottom: 1.5cqw; }
+        .eco-brand-logo { height: 4.2cqw; width: auto; display: block; flex-shrink: 0; transform: translateY(0.25cqw); }
+        .eco-brand-name {
+          font-family: "Fredoka", system-ui, sans-serif;
+          font-weight: 600;
+          font-size: 1.85cqw;
+          line-height: 1;
+          letter-spacing: 0.12em;
+          color: #f4f7f9;
+          display: inline-flex;
+          align-items: center;
+          transform: translateY(-0.07cqw);
         }
-        .eco-brand-name { font-size: 1.7cqw; font-weight: 700; letter-spacing: -0.02em; color: #fff; }
+        .eco-brand-name .k { color: #7cffb2; }
         .eco-pills { display: grid; grid-template-columns: 1fr 1fr; gap: 1.3cqw; flex: 1; min-height: 0; }
         .eco-col { display: flex; flex-direction: column; justify-content: space-evenly; }
         .eco-pill {
@@ -303,8 +311,11 @@ export default function EcosystemFlow() {
       {/* central panel */}
       <div className="eco-panel">
         <div className="eco-brand">
-          <span className="eco-brand-mark" />
-          <span className="eco-brand-name">Kubric</span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="eco-brand-logo" src="/kubric-logo.png" alt="" />
+          <span className="eco-brand-name">
+            <span className="k">K</span>UBRIC
+          </span>
         </div>
         <div className="eco-pills">
           <div className="eco-col">
