@@ -35,14 +35,14 @@ export default function LandingPage() {
             <span className="eyebrow-short">Public beta — free under 10 nodes</span>
           </div>
           <h1 className="display">
-            Kubernetes troubleshooting,
+            Your clusters break at 3 AM.
             <br />
-            <span className="grad">solved by AI.</span>
+            <span className="grad">Kubric doesn&apos;t sleep<span style={{ color: '#7cffb2', WebkitTextFillColor: '#7cffb2' }}>.</span></span>
           </h1>
           <p className="lede">
-            Kubric is an autonomous SRE agent that diagnoses cluster failures,
-            pinpoints root causes, and ships fixes — in seconds, not stand‑ups.
-            Plug it into any cluster and stop firefighting at 3 AM.
+            Kubric is your autonomous SRE — it monitors your clusters, finds
+            root causes in seconds, and ships approved fixes without you writing
+            a single runbook. Plug it in and stop firefighting at 3 AM.
           </p>
           <div className="hero-cta">
             <button
@@ -181,11 +181,9 @@ export default function LandingPage() {
                             <span className="pod-live-dot" /> Live
                           </span>
                         </div>
-                        <div className="pod-hero-title">{row.name}</div>
                         <div className="pod-hero-cmd">{row.cmd}</div>
                       </div>
                       <div className="pod-detail-right">
-                        <p className="pod-detail-lead">{row.desc}</p>
                         <div className="pod-detail-meta">
                           {row.fields.map((f) => (
                             <div className="pod-field" key={f.k}>
@@ -196,10 +194,7 @@ export default function LandingPage() {
                         </div>
                         <div className="pod-detail-foot">
                           <p className="pod-detail-note">{row.note}</p>
-                          <a
-                            className="pod-cta"
-                            href="#get-started"
-                          >
+                          <a className="pod-cta" href="#get-started">
                             {row.deploy} <span className="arrow">→</span>
                           </a>
                         </div>
