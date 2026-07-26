@@ -42,6 +42,10 @@ logs.*.json
 
 # Large media exports (not part of the app; assets live in frontend/public)
 KUBRIC_logo_transforming_animation_*.mp4
+
+# Pre-redaction screenshot originals — these still contain PII (account email),
+# kept locally only so redaction can be re-run/reverted. Never commit.
+frontend/public/docs/_original/
 patch.json
 update.sql
 fetch_investigation.py
