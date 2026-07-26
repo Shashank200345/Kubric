@@ -1,8 +1,9 @@
 /* ---------- landing page base ---------- */
 .landing {
-  --bg: #051008;
-  --bg-2: #0a1a0f;
-  --panel: #0d1e13;
+  /* softer dark — a muted charcoal-green rather than near-black, easier on the eyes */
+  --bg: #0d1712;
+  --bg-2: #121e18;
+  --panel: #16241d;
   --line: rgba(124, 255, 178, 0.08);
   --line-2: rgba(255, 255, 255, 0.14);
   --text: #e9edf1;
@@ -266,18 +267,17 @@
   z-index: 2;
 }
 
+/* subtle top glow — a soft mint wash from the top-center that matches the
+   theme accent without straining the eyes */
 .landing .hero::before {
   content: "";
   position: absolute;
-  inset: -20% -10% auto -10%;
-  height: 620px;
-  background: radial-gradient(60% 70% at 50% 30%,
-      rgba(124, 255, 178, 0.1),
-      transparent 60%),
-    radial-gradient(40% 50% at 80% 10%,
-      rgba(155, 140, 255, 0.1),
-      transparent 60%);
-  filter: blur(8px);
+  inset: -8% -10% auto -10%;
+  height: 460px;
+  background: radial-gradient(42% 58% at 50% 0%,
+      rgba(124, 255, 178, 0.13),
+      rgba(124, 255, 178, 0.04) 45%,
+      transparent 70%);
   pointer-events: none;
 }
 
@@ -504,7 +504,7 @@
 }
 
 .landing .section.dim {
-  background: linear-gradient(180deg, #08160c, #051008);
+  background: linear-gradient(180deg, #10201a, #0d1712);
 }
 
 .landing .section-title {
@@ -1057,7 +1057,7 @@
 .landing .stripes {
   padding: 100px 0;
   border-top: 1px solid var(--line);
-  background: #051008;
+  background: var(--bg);
 }
 
 .landing .stripe-title {
@@ -1237,9 +1237,7 @@
 .landing .cta {
   padding: 160px 0;
   border-top: 1px solid var(--line);
-  background: radial-gradient(60% 80% at 50% 0%,
-      rgba(124, 255, 178, 0.08),
-      transparent 60%);
+  background: var(--bg);
 }
 
 .landing .cta-inner {
@@ -1265,7 +1263,7 @@
   overflow: hidden;
   border-top: 1px solid var(--line);
   padding: 80px 0 200px;
-  background: #040b05;
+  background: #0a130e;
 }
 
 .landing .foot-grid {
@@ -1478,7 +1476,7 @@
 
 /* ---------- CTA with logo video (dark blend) ---------- */
 .landing .cta-video {
-  background: #000;
+  background: #0a130e;
   border-top: 1px solid var(--line);
   padding: 120px 0;
   overflow: hidden;
@@ -1515,7 +1513,7 @@
   width: 32%;
   height: 34%;
   pointer-events: none;
-  background: radial-gradient(120% 120% at 100% 100%, #000 55%, rgba(0, 0, 0, 0) 80%);
+  background: radial-gradient(120% 120% at 100% 100%, #0a130e 55%, rgba(10, 19, 14, 0) 80%);
 }
 
 .landing .cta-copy {
