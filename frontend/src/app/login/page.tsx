@@ -216,7 +216,7 @@ export default function LoginPage() {
             <li><span className="au-tick">✓</span> Works across every cluster and cloud</li>
           </ul>
         </div>
-        <div className="au-brand-foot">© 2026 Kubric Labs, Inc.</div>
+        <div className="au-brand-foot">© 2026 Kubric</div>
       </aside>
 
       {/* ── right form panel ── */}

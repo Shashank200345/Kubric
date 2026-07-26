@@ -376,7 +376,7 @@ export default function LandingPage() {
         </div>
 
         <div className="container foot-bottom">
-          <span>© 2026 Kubric Labs, Inc. All rights reserved.</span>
+          <span>© 2026 Kubric. All rights reserved.</span>
           <div className="foot-social">
             <a href="#">Twitter</a>
             <a href="#">LinkedIn</a>
