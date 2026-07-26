@@ -398,6 +398,16 @@ kubectl -n kubric-system logs -l app=kubric-agent --tail=30
 #   The cluster appears within ~30s. Done.`}</pre>
 
         <div className="docs-note">
+          <div className="t">About step 3 — Fargate check</div>
+          <p>
+            If <span className="docs-inline">kubectl get nodes</span> shows names starting with{' '}
+            <span className="docs-inline">fargate-ip-</span>, complete{' '}
+            <a href="#managed-fargate">EKS Fargate clusters →</a> first, then come back to step 5.
+            Otherwise carry straight on.
+          </p>
+        </div>
+
+        <div className="docs-note">
           <div className="t">If the pod is Pending</div>
           <p>Don&apos;t guess — read the scheduler&apos;s reason, then jump to the matching row in the <a href="#managed-checklist">pre-flight checklist</a>:</p>
           <pre className="docs-code">{`kubectl -n kubric-system describe pod -l app=kubric-agent
@@ -546,6 +556,31 @@ kubectl -n kubric-system get pods -w   # Pending → Running in ~60–90s`}</pre
         <h2 className="docs-h2">Dashboard · Settings</h2>
         <p>Manage connected clusters, add new ones (generate a token + copy the Helm command for your shell), set your trust mode and auto-fix boundaries, and invite teammates.</p>
         <Shot file="settings.png" window="app.kubric.dev/dashboard" alt="Settings → Clusters: connected clusters list and 'Add new cluster' with a generated token and shell-specific Helm command" caption="Settings — add clusters and generate install commands anytime." />
+
+        <h3 className="docs-h3">Adding another cluster</h3>
+        <p>
+          You&apos;re not limited to the cluster you connected during onboarding — you can add more at
+          any time from <strong>Settings → Clusters</strong>. The flow is the same as the wizard:
+          name the cluster, generate a token, then run the Helm command against it.
+        </p>
+        <ol className="docs-steps">
+          <li>
+            <h4>Open Settings → Clusters and start a new cluster</h4>
+            <p>Enter a name for the cluster you want to connect (lowercase letters, numbers, and hyphens).</p>
+          </li>
+          <li>
+            <h4>Generate the token and copy the command</h4>
+            <p>Kubric issues a per-cluster token and builds the install command. Pick the tab matching your terminal (macOS/Linux, PowerShell, or Windows CMD), copy it, and run it against the target cluster.</p>
+          </li>
+        </ol>
+        <div className="docs-shot-grid">
+          <Shot file="settings-add-cluster-1.png" window="app.kubric.dev/dashboard" alt="Settings → Clusters: adding a new cluster and entering its name" caption="Step 1 — add a cluster and give it a name." />
+          <Shot file="settings-add-cluster-2.png" window="app.kubric.dev/dashboard" alt="Settings → Clusters: generated cluster token with the shell-specific Helm install command and copy button" caption="Step 2 — generate the token and copy the Helm command." />
+        </div>
+        <div className="docs-note">
+          <div className="t">One token per cluster</div>
+          <p>Each cluster gets its own token, so a leaked token only affects that one cluster. Reuse of a token across clusters isn&apos;t supported — generate a fresh one for each. Removing an agent later is a single <a href="#faq">helm uninstall →</a>.</p>
+        </div>
       </section>
 
       {/* ---------------- Architecture ---------------- */}
