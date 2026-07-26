@@ -608,6 +608,18 @@ kubectl -n kubric-system get pods -w   # Pending → Running in ~60–90s`}</pre
         <p>Almost always a scheduling issue, not a Kubric issue. If your nodes are named <span className="docs-inline">fargate-ip-…</span>, it&apos;s a Fargate-only cluster and you need a Fargate profile for the <span className="docs-inline">kubric-system</span> namespace — see <a href="#managed-fargate">EKS Fargate clusters</a>. If they&apos;re EC2 nodes reporting &quot;Too many pods&quot;, they&apos;ve hit their pod-capacity cap — add a node. Always check <span className="docs-inline">kubectl -n kubric-system describe pod -l app=kubric-agent</span> first.</p>
         <h3 className="docs-h3">“helm: path not found”</h3>
         <p>Use the exact command from the dashboard — it installs the chart from a URL, so you don’t need the project checked out locally.</p>
+        <h3 className="docs-h3">How do I remove the agent from my cluster?</h3>
+        <p>The agent is a standard Helm release, so uninstalling is one command. This works on any cluster (minikube, EKS, GKE, AKS):</p>
+        <pre className="docs-code">{`# Remove the agent (deployment, service account, RBAC, secret)
+helm uninstall kubric-agent -n kubric-system
+
+# Optional: delete the namespace too, for a completely clean removal
+kubectl delete namespace kubric-system`}</pre>
+        <p>That&apos;s it — the agent stops pushing data immediately and nothing remains running in your cluster. On managed clusters, if you created a dedicated Fargate profile for <span className="docs-inline">kubric-system</span>, you can delete that too (<span className="docs-inline">aws eks delete-fargate-profile</span>).</p>
+        <div className="docs-note">
+          <div className="t">Clearing the cluster from the dashboard</div>
+          <p>The dashboard shows the last snapshot the agent pushed, so a removed cluster may linger until its data goes stale. Remove it from <strong>Settings → Clusters</strong> to clear it from your workspace.</p>
+        </div>
         <div className="docs-note">
           <div className="t">Ready to try it?</div>
           <p>Open the dashboard, connect a cluster, and run your first scan. <Link href="/login" style={{ color: 'var(--accent)' }}>Open the dashboard →</Link></p>
