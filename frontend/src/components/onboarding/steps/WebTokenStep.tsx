@@ -120,6 +120,17 @@ export function WebTokenStep({ wizardState, next, back }: StepProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Manual escape hatch: let the user proceed even if the heartbeat wasn't
+  // auto-detected (pod still starting, slow first heartbeat, restricted egress,
+  // etc.). The cluster will still appear in the dashboard once it reports in.
+  function handleContinueAnyway() {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    nextRef.current();
+  }
+
   async function handleCopy() {
     if (!helmCommand) return;
     try {
@@ -212,14 +223,22 @@ export function WebTokenStep({ wizardState, next, back }: StepProps) {
 
       {timedOut && (
         <div className="kbo-note">
-          Still waiting… Check that the Helm command ran successfully in your
-          cluster. Make sure the cluster has outbound internet access and the
-          agent pod is running.
+          Still waiting… Check that the Helm command ran successfully and the
+          agent pod is <code>Running</code> (<code>kubectl -n kubric-system get pods</code>),
+          the cluster has outbound internet access, and the cluster name matches.
+          You can continue anyway — the cluster will appear once it reports in.
         </div>
       )}
 
+      <p className="kbo-sub" style={{ marginTop: 16, fontSize: 12.5, opacity: 0.8 }}>
+        Already ran the command? You don&apos;t have to wait here.
+      </p>
+
       <div className="kbo-actions">
         <button type="button" onClick={back} className="kbo-btn-ghost">Back</button>
+        <button type="button" onClick={handleContinueAnyway} className="kbo-btn">
+          Continue anyway →
+        </button>
       </div>
     </div>
   );
