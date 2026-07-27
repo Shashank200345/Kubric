@@ -158,27 +158,52 @@ def handle_restart_pod(params: dict) -> dict:
     return {"message": f"Pod '{params['pod_name']}' deleted for restart."}
 
 def handle_rollback_deployment(params: dict) -> dict:
-    # A simple way to trigger a rollout restart or rollback
-    # Often rollback is done via replicaset, but restarting forces a new pod
-    # For a real rollback, we would need to find the previous replicaset.
-    # We will simulate a patch that triggers a rollout (e.g. adding an annotation).
+    """Roll back a deployment to its previous revision via the Kubernetes API.
+    
+    This is the equivalent of `kubectl rollout undo deployment/<name> -n <ns>`.
+    The Kubernetes API doesn't expose a direct "undo" endpoint, so we:
+    1. Read the rollout history to find the previous ReplicaSet.
+    2. Read that RS's pod template.
+    3. Patch the deployment's template to match the previous RS's template.
+    """
+    import copy
+    name = params["deployment_name"]
+    ns = params["namespace"]
+
+    # 1. Get the deployment's current revision
+    deployment = apps_v1.read_namespaced_deployment(name, ns)
+    current_revision = int(deployment.metadata.annotations.get("deployment.kubernetes.io/revision", "0"))
+
+    if current_revision < 2:
+        raise Exception(f"Deployment '{name}' has only 1 revision — nothing to roll back to.")
+
+    # 2. Find the ReplicaSet for the previous revision
+    target_revision = str(current_revision - 1)
+    rs_list = apps_v1.list_namespaced_replica_set(
+        namespace=ns,
+        label_selector=",".join(f"{k}={v}" for k, v in (deployment.spec.selector.match_labels or {}).items())
+    )
+
+    prev_rs = None
+    for rs in rs_list.items:
+        rs_rev = (rs.metadata.annotations or {}).get("deployment.kubernetes.io/revision", "")
+        if rs_rev == target_revision:
+            prev_rs = rs
+            break
+
+    if not prev_rs:
+        raise Exception(f"Could not find ReplicaSet for revision {target_revision} of deployment '{name}'.")
+
+    # 3. Patch the deployment's pod template to the previous RS's template
+    # (this is exactly what kubectl rollout undo does under the hood)
+    prev_template = prev_rs.spec.template
     body = {
         "spec": {
-            "template": {
-                "metadata": {
-                    "annotations": {
-                        "kubric.dev/restartedAt": datetime.now(timezone.utc).isoformat()
-                    }
-                }
-            }
+            "template": prev_template.to_dict()
         }
     }
-    apps_v1.patch_namespaced_deployment(
-        name=params["deployment_name"],
-        namespace=params["namespace"],
-        body=body
-    )
-    return {"message": f"Triggered rollout for deployment '{params['deployment_name']}'."}
+    apps_v1.patch_namespaced_deployment(name=name, namespace=ns, body=body)
+    return {"message": f"Rolled back deployment '{name}' to revision {target_revision}."}
 
 def handle_update_resource_limits(params: dict) -> dict:
     # Build the patch for the specific container
