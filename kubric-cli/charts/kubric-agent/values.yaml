@@ -6,7 +6,7 @@ agent:
   token: ""
   image:
     repository: rookie12345/kubric-agent
-    tag: "v5"
+    tag: "v6"
     pullPolicy: IfNotPresent
 
 resources:
