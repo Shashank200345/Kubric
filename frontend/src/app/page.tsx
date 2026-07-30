@@ -27,6 +27,21 @@ export default function LandingPage() {
       <section className="hero">
 
         <div className="container hero-inner">
+          <a
+            className="ph-badge"
+            href="https://www.producthunt.com/products/kubric?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-kubric"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Kubric on Product Hunt"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1210097&theme=neutral&t=1785352972246"
+              alt="Kubric - AI agent that diagnoses and fixes Kubernetes failures | Product Hunt"
+              width={250}
+              height={54}
+            />
+          </a>
           <div className="eyebrow">
             <span className="dot"></span>
             <span className="eyebrow-full">
@@ -68,7 +83,7 @@ export default function LandingPage() {
         </div>
 
         {/* Product dashboard showcase — fades into the page at the bottom */}
-        <div className="container" style={{ marginTop: "24px" }}>
+        <div className="container" style={{ marginTop: "34px" }}>
           <DashboardShowcase />
         </div>
 
