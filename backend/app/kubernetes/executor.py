@@ -1,6 +1,7 @@
 import subprocess
 import json
 import time
+import shlex
 from loguru import logger
 from typing import Optional, Union, Dict, Any
 
@@ -43,20 +44,19 @@ class KubectlExecutor:
         
         global _last_unreachable_log
 
-        parts = command.split(" ", 1)
-        if len(parts) == 2 and parts[0] == "kubectl":
-            # Inject --request-timeout so the kubectl process itself times out quickly
-            # rather than relying solely on Python's subprocess timeout (which leaves zombies on Windows)
-            base_args = "--request-timeout=5s"
+        cmd_args = shlex.split(command)
+        if cmd_args and cmd_args[0] == "kubectl":
+            # Inject --request-timeout and optional --context as safe list arguments
+            extra_args = ["--request-timeout=5s"]
             if context:
-                base_args += f" --context={context}"
-            command = f"kubectl {base_args} {parts[1]}"
-                
-        logger.info(f"Executing: {command}")
+                extra_args.append(f"--context={context}")
+            cmd_args = [cmd_args[0]] + extra_args + cmd_args[1:]
+
+        logger.info(f"Executing: {' '.join(cmd_args)}")
         try:
             result = subprocess.run(
-                command, 
-                shell=True, 
+                cmd_args,
+                shell=False,
                 check=True, 
                 stdout=subprocess.PIPE, 
                 stderr=subprocess.PIPE, 
