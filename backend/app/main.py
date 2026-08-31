@@ -896,7 +896,8 @@ async def create_action(request: ActionCreateRequest, authorization: Optional[st
         raise HTTPException(status_code=422, detail=f"Invalid parameters: {e}")
         
     namespace = request.params.get("namespace", "")
-    blocked_namespaces = ["kube-system", "kube-public", "kube-node-lease"]
+    # Protect Kubernetes system namespaces and Kubric control plane namespace from action execution
+    blocked_namespaces = ["kube-system", "kube-public", "kube-node-lease", "kubric-system"]
     if namespace in blocked_namespaces:
         raise HTTPException(status_code=403, detail="Cannot execute actions in system namespaces")
 
