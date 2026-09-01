@@ -63,3 +63,50 @@ def test_create_action_allowed_namespace():
             )
             assert response.status_code == 200
             assert response.json()["id"] == "action_123"
+
+
+def test_build_action_argv_flag_injection_prevention():
+    from app.main import _build_action_argv
+
+    # Flag injection attempts via pod_name or env_name
+    assert _build_action_argv("restart_pod", {"namespace": "default", "pod_name": "--all"}, None) is None
+    assert _build_action_argv("scale_deployment", {"namespace": "default", "deployment_name": "--selector=app", "replicas": 2}, None) is None
+    assert _build_action_argv("update_environment_variable", {"namespace": "default", "deployment_name": "web", "env_name": "--all", "env_value": "x"}, None) is None
+    assert _build_action_argv("update_environment_variable", {"namespace": "default", "deployment_name": "web", "env_name": "INVALID-NAME", "env_value": "x"}, None) is None
+
+
+def test_build_action_argv_container_scoped_env():
+    from app.main import _build_action_argv
+
+    argv_with_container = _build_action_argv(
+        "update_environment_variable",
+        {"namespace": "default", "deployment_name": "web", "container_name": "app", "env_name": "API_KEY", "env_value": "secret"},
+        None
+    )
+    assert argv_with_container == ["kubectl", "-n", "default", "set", "env", "deployment/web", "-c=app", "API_KEY=secret"]
+
+    argv_without_container = _build_action_argv(
+        "update_environment_variable",
+        {"namespace": "default", "deployment_name": "web", "env_name": "API_KEY", "env_value": "secret"},
+        None
+    )
+    assert argv_without_container == ["kubectl", "-n", "default", "set", "env", "deployment/web", "API_KEY=secret"]
+
+
+def test_create_action_invalid_env_name_pattern():
+    jwt = create_mock_jwt()
+    response = client.post(
+        "/api/v1/actions",
+        headers={"Authorization": f"Bearer {jwt}"},
+        json={
+            "investigation_id": "inv_123",
+            "action_type": "update_environment_variable",
+            "params": {
+                "namespace": "default",
+                "deployment_name": "web",
+                "env_name": "--all",
+                "env_value": "val"
+            }
+        }
+    )
+    assert response.status_code == 422

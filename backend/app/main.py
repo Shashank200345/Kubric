@@ -438,7 +438,10 @@ def _build_action_argv(action_type: str, params: Dict[str, Any], context: Option
     Using an argv list makes execution injection-proof and avoids
     cross-platform quoting issues. Returns None for unknown actions.
     """
+    import re
     ns = str(params.get("namespace") or "default")
+    if ns.startswith("-") or (context and context.startswith("-")):
+        return None
     base = ["kubectl"]
     if context:
         base += [f"--context={context}"]
@@ -446,13 +449,13 @@ def _build_action_argv(action_type: str, params: Dict[str, Any], context: Option
 
     if action_type == "restart_pod":
         pod = str(params.get("pod_name") or "")
-        if not pod:
+        if not pod or pod.startswith("-"):
             return None
         return base + ["delete", "pod", pod]
 
     if action_type == "rollback_deployment":
         dep = str(params.get("deployment_name") or "")
-        if not dep:
+        if not dep or dep.startswith("-"):
             return None
         argv = base + ["rollout", "undo", f"deployment/{dep}"]
         rev = params.get("target_revision")
@@ -468,24 +471,31 @@ def _build_action_argv(action_type: str, params: Dict[str, Any], context: Option
             limits.append(f"memory={params['memory_limit']}")
         if params.get("cpu_limit"):
             limits.append(f"cpu={params['cpu_limit']}")
-        if not dep or not container or not limits:
+        if not dep or dep.startswith("-") or not container or container.startswith("-") or not limits:
             return None
         return base + ["set", "resources", f"deployment/{dep}", f"-c={container}", f"--limits={','.join(limits)}"]
 
     if action_type == "scale_deployment":
         dep = str(params.get("deployment_name") or "")
         replicas = params.get("replicas")
-        if not dep or replicas is None:
+        if not dep or dep.startswith("-") or replicas is None:
             return None
         return base + ["scale", f"deployment/{dep}", f"--replicas={replicas}"]
 
     if action_type == "update_environment_variable":
         dep = str(params.get("deployment_name") or "")
+        container = str(params.get("container_name") or "")
         env_name = str(params.get("env_name") or "")
         env_value = str(params.get("env_value") or "")
-        if not dep or not env_name:
+        if not dep or dep.startswith("-") or not env_name or not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", env_name):
             return None
-        return base + ["set", "env", f"deployment/{dep}", f"{env_name}={env_value}"]
+        argv = base + ["set", "env", f"deployment/{dep}"]
+        if container:
+            if container.startswith("-"):
+                return None
+            argv.append(f"-c={container}")
+        argv.append(f"{env_name}={env_value}")
+        return argv
 
     return None
 
@@ -863,8 +873,8 @@ class ScaleDeploymentParams(BaseModel):
 class UpdateEnvironmentVariableParams(BaseModel):
     namespace: str
     deployment_name: str
-    container_name: str
-    env_name: str
+    container_name: Optional[str] = None
+    env_name: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
     env_value: str
 
 class ActionCreateRequest(BaseModel):
