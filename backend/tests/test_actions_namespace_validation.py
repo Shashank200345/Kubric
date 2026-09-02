@@ -74,6 +74,14 @@ def test_build_action_argv_flag_injection_prevention():
     assert _build_action_argv("update_environment_variable", {"namespace": "default", "deployment_name": "web", "env_name": "--all", "env_value": "x"}, None) is None
     assert _build_action_argv("update_environment_variable", {"namespace": "default", "deployment_name": "web", "env_name": "INVALID-NAME", "env_value": "x"}, None) is None
 
+    # Validation for target_revision, resource limits, and replicas
+    assert _build_action_argv("rollback_deployment", {"namespace": "default", "deployment_name": "web", "target_revision": -1}, None) is None
+    assert _build_action_argv("rollback_deployment", {"namespace": "default", "deployment_name": "web", "target_revision": "invalid"}, None) is None
+    assert _build_action_argv("update_resource_limits", {"namespace": "default", "deployment_name": "web", "container_name": "app", "memory_limit": "--all"}, None) is None
+    assert _build_action_argv("update_resource_limits", {"namespace": "default", "deployment_name": "web", "container_name": "app", "cpu_limit": "-100m"}, None) is None
+    assert _build_action_argv("scale_deployment", {"namespace": "default", "deployment_name": "web", "replicas": -5}, None) is None
+    assert _build_action_argv("scale_deployment", {"namespace": "default", "deployment_name": "web", "replicas": 100}, None) is None
+
 
 def test_build_action_argv_container_scoped_env():
     from app.main import _build_action_argv
@@ -107,6 +115,28 @@ def test_create_action_invalid_env_name_pattern():
                 "env_name": "--all",
                 "env_value": "val"
             }
+        }
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize("param_key, invalid_value, action_type, base_params", [
+    ("target_revision", -1, "rollback_deployment", {"namespace": "default", "deployment_name": "web"}),
+    ("memory_limit", "--output=json", "update_resource_limits", {"namespace": "default", "deployment_name": "web", "container_name": "app"}),
+    ("cpu_limit", "100m; rm -rf /", "update_resource_limits", {"namespace": "default", "deployment_name": "web", "container_name": "app"}),
+    ("replicas", 100, "scale_deployment", {"namespace": "default", "deployment_name": "web"}),
+])
+def test_create_action_invalid_parameter_validation(param_key, invalid_value, action_type, base_params):
+    jwt = create_mock_jwt()
+    params = dict(base_params)
+    params[param_key] = invalid_value
+    response = client.post(
+        "/api/v1/actions",
+        headers={"Authorization": f"Bearer {jwt}"},
+        json={
+            "investigation_id": "inv_123",
+            "action_type": action_type,
+            "params": params
         }
     )
     assert response.status_code == 422
