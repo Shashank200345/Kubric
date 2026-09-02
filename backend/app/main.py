@@ -459,18 +459,29 @@ def _build_action_argv(action_type: str, params: Dict[str, Any], context: Option
             return None
         argv = base + ["rollout", "undo", f"deployment/{dep}"]
         rev = params.get("target_revision")
-        if rev:
+        if rev is not None:
+            if not isinstance(rev, int) or rev <= 0:
+                return None
             argv += [f"--to-revision={rev}"]
         return argv
 
     if action_type == "update_resource_limits":
         dep = str(params.get("deployment_name") or "")
         container = str(params.get("container_name") or "")
+        mem = params.get("memory_limit")
+        cpu = params.get("cpu_limit")
+        res_pattern = r"^[0-9]+([.][0-9]+)?(m|Ki|Mi|Gi|Ti|Pi|Ei|k|M|G|T|P|E)?$"
         limits = []
-        if params.get("memory_limit"):
-            limits.append(f"memory={params['memory_limit']}")
-        if params.get("cpu_limit"):
-            limits.append(f"cpu={params['cpu_limit']}")
+        if mem:
+            mem_str = str(mem).strip()
+            if mem_str.startswith("-") or not re.match(res_pattern, mem_str):
+                return None
+            limits.append(f"memory={mem_str}")
+        if cpu:
+            cpu_str = str(cpu).strip()
+            if cpu_str.startswith("-") or not re.match(res_pattern, cpu_str):
+                return None
+            limits.append(f"cpu={cpu_str}")
         if not dep or dep.startswith("-") or not container or container.startswith("-") or not limits:
             return None
         return base + ["set", "resources", f"deployment/{dep}", f"-c={container}", f"--limits={','.join(limits)}"]
@@ -478,7 +489,7 @@ def _build_action_argv(action_type: str, params: Dict[str, Any], context: Option
     if action_type == "scale_deployment":
         dep = str(params.get("deployment_name") or "")
         replicas = params.get("replicas")
-        if not dep or dep.startswith("-") or replicas is None:
+        if not dep or dep.startswith("-") or replicas is None or not isinstance(replicas, int) or replicas < 0 or replicas > 50:
             return None
         return base + ["scale", f"deployment/{dep}", f"--replicas={replicas}"]
 
@@ -855,14 +866,16 @@ class RestartPodParams(BaseModel):
 class RollbackDeploymentParams(BaseModel):
     namespace: str
     deployment_name: str
-    target_revision: Optional[int] = None
+    target_revision: Optional[int] = Field(None, ge=1)
+
+_RESOURCE_QTY_PATTERN = r"^[0-9]+([.][0-9]+)?(m|Ki|Mi|Gi|Ti|Pi|Ei|k|M|G|T|P|E)?$"
 
 class UpdateResourceLimitsParams(BaseModel):
     namespace: str
     deployment_name: str
     container_name: str
-    memory_limit: Optional[str] = None
-    cpu_limit: Optional[str] = None
+    memory_limit: Optional[str] = Field(None, pattern=_RESOURCE_QTY_PATTERN)
+    cpu_limit: Optional[str] = Field(None, pattern=_RESOURCE_QTY_PATTERN)
 
 class ScaleDeploymentParams(BaseModel):
     namespace: str
