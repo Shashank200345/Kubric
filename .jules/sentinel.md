@@ -7,3 +7,8 @@
 **Vulnerability:** `_build_action_argv` constructed kubectl argument arrays without validating whether resource names or environment variable names started with dashes or flags (e.g. `env_name="--all"` or `pod_name="--all"`), enabling option injection attacks that alter CLI parameter parsing.
 **Learning:** Even when avoiding `shell=True`, CLI binaries (like `kubectl`) can interpret arguments starting with `-` as options/flags rather than positional arguments or values.
 **Prevention:** Validate resource names and environment variable names against strict regex patterns (e.g., `^[A-Za-z_][A-Za-z0-9_]*$` for environment variables) and reject parameter values starting with `-`.
+
+## 2026-09-01 - Prevent Flag Injection in LogsCollector and Context Parameter
+**Vulnerability:** `LogsCollector` formatted pod `name` and `namespace` into `kubectl logs` command strings without validating whether they started with dashes or flags (e.g., `name="--all"`), allowing CLI option injection. Additionally, `KubectlExecutor.run` allowed context parameters starting with `-`.
+**Learning:** Inspecting pod logs or cluster state with parameters sourced from inputs can trigger CLI option injection if positional arguments are not checked for leading dashes or validated against expected resource name schemas.
+**Prevention:** Enforce RFC 1123 DNS subdomain name regex (`^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$`) on pod/namespace resource names before constructing CLI commands, and reject context flags starting with `-`.

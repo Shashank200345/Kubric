@@ -44,6 +44,9 @@ class KubectlExecutor:
         
         global _last_unreachable_log
 
+        if context and context.startswith("-"):
+            raise KubectlError(f"Invalid cluster context: {context}.")
+
         cmd_args = shlex.split(command)
         if cmd_args and cmd_args[0] == "kubectl":
             # Inject --request-timeout and optional --context as safe list arguments
