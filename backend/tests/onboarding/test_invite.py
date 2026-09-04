@@ -12,11 +12,18 @@ from fastapi import FastAPI
 from app.api.onboarding import router
 
 
-def _make_jwt(sub: str = "user-123") -> str:
-    """Create a minimal JWT-shaped token for testing auth extraction."""
+import hmac
+import hashlib
+
+TEST_SECRET = "test-jwt-secret-key"
+
+def _make_jwt(sub: str = "user-123", secret: str = TEST_SECRET) -> str:
+    """Create a signed JWT for testing auth extraction."""
     header = base64.urlsafe_b64encode(json.dumps({"alg": "HS256"}).encode()).rstrip(b"=").decode()
     payload = base64.urlsafe_b64encode(json.dumps({"sub": sub}).encode()).rstrip(b"=").decode()
-    signature = base64.urlsafe_b64encode(b"fake-sig").rstrip(b"=").decode()
+    msg = f"{header}.{payload}".encode("utf-8")
+    sig_bytes = hmac.new(secret.encode("utf-8"), msg, hashlib.sha256).digest()
+    signature = base64.urlsafe_b64encode(sig_bytes).rstrip(b"=").decode()
     return f"{header}.{payload}.{signature}"
 
 
@@ -35,8 +42,9 @@ def client(app):
 
 
 @pytest.fixture
-def auth_headers():
+def auth_headers(monkeypatch):
     """Valid authorization headers."""
+    monkeypatch.setenv("JWT_SECRET", TEST_SECRET)
     return {"Authorization": f"Bearer {_make_jwt()}"}
 
 
