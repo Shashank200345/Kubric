@@ -15,17 +15,25 @@ app = FastAPI()
 app.include_router(router)
 
 
-def _make_jwt(payload: dict) -> str:
-    """Create a fake JWT with the given payload (no signature verification)."""
+import hmac
+import hashlib
+
+TEST_SECRET = "test-jwt-secret-key"
+
+def _make_jwt(payload: dict, secret: str = TEST_SECRET) -> str:
+    """Create a signed JWT with the given payload."""
     header = base64.urlsafe_b64encode(json.dumps({"alg": "HS256"}).encode()).rstrip(b"=").decode()
     body = base64.urlsafe_b64encode(json.dumps(payload).encode()).rstrip(b"=").decode()
-    signature = base64.urlsafe_b64encode(b"fakesig").rstrip(b"=").decode()
+    msg = f"{header}.{body}".encode("utf-8")
+    sig_bytes = hmac.new(secret.encode("utf-8"), msg, hashlib.sha256).digest()
+    signature = base64.urlsafe_b64encode(sig_bytes).rstrip(b"=").decode()
     return f"{header}.{body}.{signature}"
 
 
 @pytest.fixture
-def auth_headers():
+def auth_headers(monkeypatch):
     """Return valid Authorization headers with a user_id in the JWT sub claim."""
+    monkeypatch.setenv("JWT_SECRET", TEST_SECRET)
     token = _make_jwt({"sub": "user-123-abc"})
     return {"Authorization": f"Bearer {token}"}
 
@@ -75,6 +83,7 @@ async def test_heartbeat_returns_connected_false_when_cluster_not_found(auth_hea
         mock_getenv.side_effect = lambda key: {
             "INSFORGE_URL": "https://test.insforge.app",
             "INSFORGE_API_KEY": "test-api-key",
+            "JWT_SECRET": TEST_SECRET,
         }.get(key)
 
         with patch("app.api.onboarding.httpx.AsyncClient", return_value=mock_client_instance):
@@ -108,6 +117,7 @@ async def test_heartbeat_returns_connected_false_when_last_heartbeat_is_null(aut
         mock_getenv.side_effect = lambda key: {
             "INSFORGE_URL": "https://test.insforge.app",
             "INSFORGE_API_KEY": "test-api-key",
+            "JWT_SECRET": TEST_SECRET,
         }.get(key)
 
         with patch("app.api.onboarding.httpx.AsyncClient", return_value=mock_client_instance):
@@ -141,6 +151,7 @@ async def test_heartbeat_returns_connected_true_when_heartbeat_exists(auth_heade
         mock_getenv.side_effect = lambda key: {
             "INSFORGE_URL": "https://test.insforge.app",
             "INSFORGE_API_KEY": "test-api-key",
+            "JWT_SECRET": TEST_SECRET,
         }.get(key)
 
         with patch("app.api.onboarding.httpx.AsyncClient", return_value=mock_client_instance):
@@ -175,6 +186,7 @@ async def test_heartbeat_returns_connected_false_on_http_error(auth_headers):
         mock_getenv.side_effect = lambda key: {
             "INSFORGE_URL": "https://test.insforge.app",
             "INSFORGE_API_KEY": "test-api-key",
+            "JWT_SECRET": TEST_SECRET,
         }.get(key)
 
         with patch("app.api.onboarding.httpx.AsyncClient", return_value=mock_client_instance):
