@@ -16,20 +16,33 @@ app = FastAPI()
 app.include_router(router)
 
 
-def _make_jwt(payload: dict) -> str:
-    """Create a fake JWT with the given payload (no signature verification)."""
-    header = base64.urlsafe_b64encode(json.dumps({"alg": "HS256"}).encode()).rstrip(b"=").decode()
+import hmac
+import hashlib
+
+TEST_SECRET = "test-jwt-secret-key"
+
+def _make_jwt(payload: dict, secret: str = TEST_SECRET, alg: str = "HS256", invalid_sig: bool = False) -> str:
+    """Create a signed JWT with the given payload."""
+    header = base64.urlsafe_b64encode(json.dumps({"alg": alg}).encode()).rstrip(b"=").decode()
     body = base64.urlsafe_b64encode(json.dumps(payload).encode()).rstrip(b"=").decode()
-    signature = base64.urlsafe_b64encode(b"fakesig").rstrip(b"=").decode()
-    return f"{header}.{body}.{signature}"
+    msg = f"{header}.{body}".encode("utf-8")
+    if invalid_sig:
+        signature = base64.urlsafe_b64encode(b"invalidsig").rstrip(b"=").decode()
+    elif alg == "none":
+        signature = ""
+    else:
+        sig_bytes = hmac.new(secret.encode("utf-8"), msg, hashlib.sha256).digest()
+        signature = base64.urlsafe_b64encode(sig_bytes).rstrip(b"=").decode()
+    return f"{header}.{body}.{signature}" if alg != "none" else f"{header}.{body}."
 
 
 TEST_USER_ID = "user-123-abc"
 
 
 @pytest.fixture
-def auth_headers():
-    """Return valid Authorization headers with a user_id in the JWT sub claim."""
+def auth_headers(monkeypatch):
+    """Return valid Authorization headers with a properly signed JWT."""
+    monkeypatch.setenv("JWT_SECRET", TEST_SECRET)
     token = _make_jwt({"sub": TEST_USER_ID})
     return {"Authorization": f"Bearer {token}"}
 
@@ -49,6 +62,48 @@ async def test_get_state_returns_401_without_auth():
 async def test_get_state_returns_401_with_invalid_token():
     """With an invalid JWT (missing sub claim), returns 401."""
     token = _make_jwt({"name": "no-sub-here"})
+    headers = {"Authorization": f"Bearer {token}"}
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/api/v1/onboarding/state", headers=headers)
+
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_get_state_returns_401_with_forged_signature(monkeypatch):
+    """Rejects JWT with an invalid signature."""
+    monkeypatch.setenv("JWT_SECRET", TEST_SECRET)
+    token = _make_jwt({"sub": TEST_USER_ID}, invalid_sig=True)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/api/v1/onboarding/state", headers=headers)
+
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_get_state_returns_401_with_alg_none(monkeypatch):
+    """Rejects JWT using 'alg: none'."""
+    monkeypatch.setenv("JWT_SECRET", TEST_SECRET)
+    token = _make_jwt({"sub": TEST_USER_ID}, alg="none")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/api/v1/onboarding/state", headers=headers)
+
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_get_state_returns_401_with_expired_token(monkeypatch):
+    """Rejects expired JWT."""
+    monkeypatch.setenv("JWT_SECRET", TEST_SECRET)
+    token = _make_jwt({"sub": TEST_USER_ID, "exp": 1000000000})  # past timestamp
     headers = {"Authorization": f"Bearer {token}"}
 
     transport = ASGITransport(app=app)

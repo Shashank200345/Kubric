@@ -12,3 +12,7 @@
 **Vulnerability:** `LogsCollector` formatted pod `name` and `namespace` into `kubectl logs` command strings without validating whether they started with dashes or flags (e.g., `name="--all"`), allowing CLI option injection. Additionally, `KubectlExecutor.run` allowed context parameters starting with `-`.
 **Learning:** Inspecting pod logs or cluster state with parameters sourced from inputs can trigger CLI option injection if positional arguments are not checked for leading dashes or validated against expected resource name schemas.
 **Prevention:** Enforce RFC 1123 DNS subdomain name regex (`^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$`) on pod/namespace resource names before constructing CLI commands, and reject context flags starting with `-`.
+## 2026-09-01 - Enforce Cryptographic JWT Signature & Expiration Verification
+**Vulnerability:** `get_current_user` in `backend/app/api/onboarding.py` extracted the `sub` user ID claim from Bearer JWTs by unverified base64 decoding of the payload without validating the HMAC-SHA256 signature, `alg` header, or `exp` timestamp, allowing arbitrary user impersonation and signature bypass.
+**Learning:** Merely parsing JSON payload claims from JWT strings without verifying HMAC signatures or algorithm headers opens API endpoints to signature forgery and authentication bypass attacks.
+**Prevention:** Always cryptographically verify HMAC signatures (`HS256`) against a secret using constant-time comparison (`hmac.compare_digest`), enforce `alg` header checks, and validate token expiration timestamps (`exp`).

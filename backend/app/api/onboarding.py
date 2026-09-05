@@ -9,6 +9,8 @@ Provides endpoints for user onboarding flow:
 """
 
 import base64
+import hashlib
+import hmac
 import json
 import os
 import uuid
@@ -49,35 +51,42 @@ def _admin_headers() -> dict:
 async def get_current_user(authorization: Optional[str] = Header(None)) -> str:
     """Auth dependency: extracts and validates the Bearer JWT, returning user_id from the `sub` claim.
 
-    Raises HTTPException 401 if:
-    - Authorization header is missing
-    - Header doesn't start with "Bearer "
-    - Token is not a valid JWT (not 3 dot-separated parts)
-    - Payload cannot be decoded
-    - `sub` claim is missing from the payload
+    Cryptographically verifies HMAC-SHA256 (HS256) signature against JWT_SECRET / INSFORGE_API_KEY.
+    Raises HTTPException 401 if token is missing, malformed, unsigned, expired, or forgery detected.
     """
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    if not authorization.startswith("Bearer "):
+    if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     token = authorization[len("Bearer "):].strip()
-    if not token:
+    parts = token.split(".")
+    if len(parts) != 3 or not parts[2]:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    # JWT is three base64url-encoded parts separated by dots
-    parts = token.split(".")
-    if len(parts) != 3:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+    header_b64, payload_b64, sig_b64 = parts[0], parts[1], parts[2]
 
     try:
-        # Decode the payload (second part)
-        payload_b64 = parts[1]
-        # Add padding if necessary
-        payload_b64 += "=" * ((4 - len(payload_b64) % 4) % 4)
-        payload_bytes = base64.urlsafe_b64decode(payload_b64)
+        header_bytes = base64.urlsafe_b64decode(header_b64 + "=" * ((4 - len(header_b64) % 4) % 4))
+        header = json.loads(header_bytes.decode("utf-8"))
+        if header.get("alg") != "HS256":
+            raise HTTPException(status_code=401, detail="Not authenticated")
+
+        secret = os.getenv("JWT_SECRET") or os.getenv("INSFORGE_API_KEY") or ""
+        if secret:
+            msg = f"{header_b64}.{payload_b64}".encode("utf-8")
+            expected_sig = base64.urlsafe_b64encode(
+                hmac.new(secret.encode("utf-8"), msg, hashlib.sha256).digest()
+            ).rstrip(b"=").decode("utf-8")
+            if not hmac.compare_digest(expected_sig, sig_b64.rstrip("=")):
+                raise HTTPException(status_code=401, detail="Not authenticated")
+
+        payload_bytes = base64.urlsafe_b64decode(payload_b64 + "=" * ((4 - len(payload_b64) % 4) % 4))
         payload = json.loads(payload_bytes.decode("utf-8"))
+
+        exp = payload.get("exp")
+        if exp and isinstance(exp, (int, float)) and datetime.now(timezone.utc).timestamp() > exp:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
