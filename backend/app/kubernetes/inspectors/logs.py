@@ -1,6 +1,9 @@
+import re
 from app.kubernetes.executor import KubectlExecutor
 from typing import Dict, Any, List
 from loguru import logger
+
+_RESOURCE_NAME_PATTERN = re.compile(r"^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$", re.IGNORECASE)
 
 class LogsCollector:
     """Collector for Kubernetes pod logs."""
@@ -17,10 +20,15 @@ class LogsCollector:
         collected_logs = {}
         
         for pod in problematic_pods:
-            name = pod.get("name")
-            namespace = pod.get("namespace")
+            name = str(pod.get("name") or "")
+            namespace = str(pod.get("namespace") or "")
             
             if not name or not namespace:
+                continue
+
+            # Prevent option/flag injection (e.g. name="--all") and invalid characters
+            if name.startswith("-") or namespace.startswith("-") or not _RESOURCE_NAME_PATTERN.match(name) or not _RESOURCE_NAME_PATTERN.match(namespace):
+                logger.warning(f"Skipping invalid pod name or namespace for logs collection: name={name}, namespace={namespace}")
                 continue
                 
             # Fetch tail of 50 lines to keep it concise
