@@ -613,20 +613,44 @@ async def _evidence_from_state(context: Optional[str], user_id: Optional[str] = 
 
 
 def _user_id_from_jwt(authorization: Optional[str]) -> Optional[str]:
-    """Best-effort extraction of the user id (sub claim) from a Bearer JWT."""
-    if not authorization:
+    """Cryptographically verify JWT signature and timestamp, returning user id (sub claim)."""
+    if not authorization or not authorization.startswith("Bearer "):
         return None
-    token = authorization.split("Bearer ")[-1].strip()
+    token = authorization[len("Bearer "):].strip()
     parts = token.split(".")
-    if len(parts) != 3:
+    if len(parts) != 3 or not parts[2]:
         return None
+
+    header_b64, payload_b64, sig_b64 = parts[0], parts[1], parts[2]
+
     try:
         import base64
+        import hashlib
+        import hmac
         import json as _json
-        payload = parts[1]
-        payload += "=" * ((4 - len(payload) % 4) % 4)
-        decoded = base64.b64decode(payload).decode("utf-8")
-        return _json.loads(decoded).get("sub")
+
+        header_bytes = base64.urlsafe_b64decode(header_b64 + "=" * ((4 - len(header_b64) % 4) % 4))
+        header = _json.loads(header_bytes.decode("utf-8"))
+        if header.get("alg") != "HS256":
+            return None
+
+        secret = os.getenv("JWT_SECRET") or os.getenv("INSFORGE_API_KEY") or ""
+        if secret:
+            msg = f"{header_b64}.{payload_b64}".encode("utf-8")
+            expected_sig = base64.urlsafe_b64encode(
+                hmac.new(secret.encode("utf-8"), msg, hashlib.sha256).digest()
+            ).rstrip(b"=").decode("utf-8")
+            if not hmac.compare_digest(expected_sig, sig_b64.rstrip("=")):
+                return None
+
+        payload_bytes = base64.urlsafe_b64decode(payload_b64 + "=" * ((4 - len(payload_b64) % 4) % 4))
+        payload = _json.loads(payload_bytes.decode("utf-8"))
+
+        exp = payload.get("exp")
+        if exp and isinstance(exp, (int, float)) and datetime.now(timezone.utc).timestamp() > exp:
+            return None
+
+        return payload.get("sub")
     except Exception:
         return None
 
@@ -932,16 +956,7 @@ async def create_action(request: ActionCreateRequest, authorization: Optional[st
         if not inv_details:
             raise HTTPException(status_code=404, detail="Investigation not found")
 
-        user_id = inv_details.get("user_id")
-        if not user_id:
-            import base64
-            import json
-            parts = user_jwt.split(".")
-            if len(parts) == 3:
-                payload = parts[1]
-                payload += "=" * ((4 - len(payload) % 4) % 4)
-                decoded = base64.b64decode(payload).decode("utf-8")
-                user_id = json.loads(decoded).get("sub")
+        user_id = inv_details.get("user_id") or _user_id_from_jwt(authorization)
 
         if not user_id:
             raise HTTPException(status_code=400, detail="Could not determine user_id for action")
