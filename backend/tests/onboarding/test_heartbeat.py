@@ -52,7 +52,8 @@ async def test_heartbeat_returns_401_without_auth():
 @pytest.mark.asyncio
 async def test_heartbeat_returns_connected_false_when_env_not_configured(auth_headers):
     """When INSFORGE_URL or INSFORGE_API_KEY is missing, returns connected=False."""
-    with patch("app.api.onboarding.os.getenv", return_value=None):
+    with patch("app.api.onboarding.os.getenv") as mock_getenv:
+        mock_getenv.side_effect = lambda key, default=None: TEST_SECRET if key == "JWT_SECRET" else None
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.get("/api/v1/onboarding/heartbeat/my-cluster", headers=auth_headers)

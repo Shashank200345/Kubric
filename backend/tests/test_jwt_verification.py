@@ -54,6 +54,15 @@ def test_user_id_from_jwt_expired(monkeypatch):
     res = _user_id_from_jwt(f"Bearer {token}")
     assert res is None
 
+def test_user_id_from_jwt_no_secret_configured(monkeypatch):
+    monkeypatch.delenv("JWT_SECRET", raising=False)
+    monkeypatch.delenv("INSFORGE_API_KEY", raising=False)
+    payload = {"sub": "user_12345", "exp": int(time.time()) + 3600}
+    token = make_jwt(payload)
+
+    res = _user_id_from_jwt(f"Bearer {token}")
+    assert res is None
+
 def test_user_id_from_jwt_malformed():
     assert _user_id_from_jwt(None) is None
     assert _user_id_from_jwt("InvalidHeader") is None
