@@ -16,3 +16,8 @@
 **Vulnerability:** `get_current_user` in `backend/app/api/onboarding.py` extracted the `sub` user ID claim from Bearer JWTs by unverified base64 decoding of the payload without validating the HMAC-SHA256 signature, `alg` header, or `exp` timestamp, allowing arbitrary user impersonation and signature bypass.
 **Learning:** Merely parsing JSON payload claims from JWT strings without verifying HMAC signatures or algorithm headers opens API endpoints to signature forgery and authentication bypass attacks.
 **Prevention:** Always cryptographically verify HMAC signatures (`HS256`) against a secret using constant-time comparison (`hmac.compare_digest`), enforce `alg` header checks, and validate token expiration timestamps (`exp`).
+
+## 2026-09-06 - Reject JWTs When Secret Environment Variable Is Missing
+**Vulnerability:** `_user_id_from_jwt` (`backend/app/main.py`) and `get_current_user` (`backend/app/api/onboarding.py`) checked `if secret:` before validating HMAC-SHA256 JWT signatures. If neither `JWT_SECRET` nor `INSFORGE_API_KEY` was configured, `secret` evaluated to empty string, bypassing signature verification and accepting unverified/forged JWTs.
+**Learning:** Wrapping signature verification inside `if secret:` causes unconfigured environment secrets to fail open and trust unverified tokens.
+**Prevention:** Fail closed when secret key environment variables are missing or empty (`if not secret: return None`), rejecting all incoming tokens until secret configuration is present.

@@ -71,13 +71,15 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> str:
             raise HTTPException(status_code=401, detail="Not authenticated")
 
         secret = os.getenv("JWT_SECRET") or os.getenv("INSFORGE_API_KEY") or ""
-        if secret:
-            msg = f"{header_b64}.{payload_b64}".encode("utf-8")
-            expected_sig = base64.urlsafe_b64encode(
-                hmac.new(secret.encode("utf-8"), msg, hashlib.sha256).digest()
-            ).rstrip(b"=").decode("utf-8")
-            if not hmac.compare_digest(expected_sig, sig_b64.rstrip("=")):
-                raise HTTPException(status_code=401, detail="Not authenticated")
+        if not secret:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+
+        msg = f"{header_b64}.{payload_b64}".encode("utf-8")
+        expected_sig = base64.urlsafe_b64encode(
+            hmac.new(secret.encode("utf-8"), msg, hashlib.sha256).digest()
+        ).rstrip(b"=").decode("utf-8")
+        if not hmac.compare_digest(expected_sig, sig_b64.rstrip("=")):
+            raise HTTPException(status_code=401, detail="Not authenticated")
 
         payload_bytes = base64.urlsafe_b64decode(payload_b64 + "=" * ((4 - len(payload_b64) % 4) % 4))
         payload = json.loads(payload_bytes.decode("utf-8"))
