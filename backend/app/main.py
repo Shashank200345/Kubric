@@ -413,6 +413,10 @@ def _parse_mem(val: str) -> float:
 @app.get("/investigate/{investigation_id}/progress")
 async def get_investigation_progress(investigation_id: str, authorization: Optional[str] = Header(None)):
     """Fetches the progress steps for a specific investigation."""
+    from app.insforge_client import _is_uuid
+    if not _is_uuid(investigation_id):
+        return {"progress": []}
+
     # We use the backend's admin client to bypass RLS since the frontend anon_key is blocked
     client = InsForgeClient()
     if not client.url:
