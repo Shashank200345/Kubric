@@ -86,7 +86,7 @@ class InsForgeClient:
 
     async def get_investigation_details(self, investigation_id: str) -> dict | None:
         """Fetch the user_id and cluster_context from the investigations table for a given investigation."""
-        if not self.url:
+        if not self.url or not _is_uuid(investigation_id):
             return None
         async with httpx.AsyncClient() as client:
             try:
@@ -214,7 +214,7 @@ class InsForgeClient:
 
     async def get_action(self, action_id: str, user_id: str) -> dict | None:
         """Fetch a single action's status/output, scoped to the owning user."""
-        if not self.url:
+        if not self.url or not _is_uuid(action_id):
             return None
         async with httpx.AsyncClient() as client:
             try:
@@ -231,7 +231,7 @@ class InsForgeClient:
 
     async def update_action_result(self, action_id: str, status: str, output: dict) -> bool:
         """Update the status and output of an action."""
-        if not self.url:
+        if not self.url or not _is_uuid(action_id):
             return False
         async with httpx.AsyncClient() as client:
             try:

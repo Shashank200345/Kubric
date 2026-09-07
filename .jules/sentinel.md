@@ -21,3 +21,8 @@
 **Vulnerability:** `_user_id_from_jwt` (`backend/app/main.py`) and `get_current_user` (`backend/app/api/onboarding.py`) checked `if secret:` before validating HMAC-SHA256 JWT signatures. If neither `JWT_SECRET` nor `INSFORGE_API_KEY` was configured, `secret` evaluated to empty string, bypassing signature verification and accepting unverified/forged JWTs.
 **Learning:** Wrapping signature verification inside `if secret:` causes unconfigured environment secrets to fail open and trust unverified tokens.
 **Prevention:** Fail closed when secret key environment variables are missing or empty (`if not secret: return None`), rejecting all incoming tokens until secret configuration is present.
+
+## 2026-09-07 - Validate UUIDs Before Formatting PostgREST Query Filters
+**Vulnerability:** `get_investigation_details`, `get_action`, and `update_action_result` in `InsForgeClient`, as well as `get_investigation_progress` in `main.py`, interpolated user-provided ID parameters directly into PostgREST REST query URLs (e.g. `f"actions?id=eq.{action_id}"`) using admin-privileged API keys without validating UUID format. Malicious inputs with PostgREST query parameters or operators enabled query manipulation across database rows.
+**Learning:** PostgREST query strings constructed via string interpolation accept commas and query parameters that alter SQL filtering when executing requests with admin service-role credentials.
+**Prevention:** Validate ID parameters against `_is_uuid` before formatting PostgREST query strings, safely returning early if the ID format is invalid.
