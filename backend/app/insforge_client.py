@@ -136,7 +136,7 @@ class InsForgeClient:
 
     async def validate_cluster_token(self, cluster_token: str) -> tuple[str | None, str | None]:
         """Validates a cluster_token against the clusters table and returns (user_id, cluster_name)."""
-        if not self.url:
+        if not self.url or not _is_uuid(cluster_token):
             return None, None
         async with httpx.AsyncClient() as client:
             try:
