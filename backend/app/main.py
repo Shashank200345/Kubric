@@ -753,6 +753,11 @@ async def process_incident_background(investigation_id: str, evidence: dict):
 
 async def _record_heartbeat(cluster_token: str, user_id: str):
     """Update clusters.last_heartbeat_at and mark onboarding connection as verified if needed."""
+    from app.insforge_client import _is_uuid
+    if not _is_uuid(cluster_token):
+        logger.warning("Cannot record heartbeat: Invalid cluster_token UUID format")
+        return
+
     insforge_url = os.getenv("INSFORGE_URL", "")
     insforge_api_key = os.getenv("INSFORGE_API_KEY", "")
     if not insforge_url or not insforge_api_key:

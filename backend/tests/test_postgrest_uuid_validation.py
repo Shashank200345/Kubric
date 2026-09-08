@@ -44,6 +44,11 @@ async def test_insforge_client_uuid_validation(monkeypatch):
             updated = await insforge.update_action_result(invalid_id, "success", {"msg": "done"})
             assert updated is False
 
+            # validate_cluster_token
+            user_id, cluster_name = await insforge.validate_cluster_token(invalid_id)
+            assert user_id is None
+            assert cluster_name is None
+
         # Verify no HTTP calls were made for invalid UUIDs
         mock_get.assert_not_called()
         mock_patch.assert_not_called()
