@@ -26,3 +26,8 @@
 **Vulnerability:** `get_investigation_details`, `get_action`, and `update_action_result` in `InsForgeClient`, as well as `get_investigation_progress` in `main.py`, interpolated user-provided ID parameters directly into PostgREST REST query URLs (e.g. `f"actions?id=eq.{action_id}"`) using admin-privileged API keys without validating UUID format. Malicious inputs with PostgREST query parameters or operators enabled query manipulation across database rows.
 **Learning:** PostgREST query strings constructed via string interpolation accept commas and query parameters that alter SQL filtering when executing requests with admin service-role credentials.
 **Prevention:** Validate ID parameters against `_is_uuid` before formatting PostgREST query strings, safely returning early if the ID format is invalid.
+
+## 2026-09-09 - Validate JWT `sub` Claim Format Before Using as Database User ID
+**Vulnerability:** `get_current_user` in `backend/app/api/onboarding.py` extracted the `sub` claim from authenticated JWTs without validating that it conformed to a UUID format (matching the DB schema `user_id UUID NOT NULL`). A JWT signed with a non-UUID `sub` claim containing PostgREST filter operators (e.g. `sub="user_123,user_id=neq.0"`) could manipulate downstream PostgREST REST query parameters when making admin-privileged DB calls.
+**Learning:** Even when JWT signatures are cryptographically verified, extracted claim values used directly in database query filters or REST calls must be validated against expected data types (such as UUIDs).
+**Prevention:** Validate `sub` user ID claims against `_is_uuid(user_id)` during JWT authentication dependency checks before returning the user ID.

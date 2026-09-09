@@ -36,7 +36,7 @@ def _make_jwt(payload: dict, secret: str = TEST_SECRET, alg: str = "HS256", inva
     return f"{header}.{body}.{signature}" if alg != "none" else f"{header}.{body}."
 
 
-TEST_USER_ID = "user-123-abc"
+TEST_USER_ID = "12345678-1234-5678-1234-567812345678"
 
 
 @pytest.fixture

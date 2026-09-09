@@ -34,7 +34,7 @@ def _make_jwt(payload: dict, secret: str = TEST_SECRET) -> str:
 def auth_headers(monkeypatch):
     """Return valid Authorization headers with a user_id in the JWT sub claim."""
     monkeypatch.setenv("JWT_SECRET", TEST_SECRET)
-    token = _make_jwt({"sub": "user-123-abc"})
+    token = _make_jwt({"sub": "12345678-1234-5678-1234-567812345678"})
     return {"Authorization": f"Bearer {token}"}
 
 

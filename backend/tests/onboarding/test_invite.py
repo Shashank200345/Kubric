@@ -17,7 +17,7 @@ import hashlib
 
 TEST_SECRET = "test-jwt-secret-key"
 
-def _make_jwt(sub: str = "user-123", secret: str = TEST_SECRET) -> str:
+def _make_jwt(sub: str = "12345678-1234-5678-1234-567812345678", secret: str = TEST_SECRET) -> str:
     """Create a signed JWT for testing auth extraction."""
     header = base64.urlsafe_b64encode(json.dumps({"alg": "HS256"}).encode()).rstrip(b"=").decode()
     payload = base64.urlsafe_b64encode(json.dumps({"sub": sub}).encode()).rstrip(b"=").decode()

@@ -21,6 +21,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from loguru import logger
 from typing import Optional
 
+from app.insforge_client import _is_uuid
 from app.models.onboarding import (
     ONBOARDING_STEPS,
     ClusterTokenRequest,
@@ -93,7 +94,7 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> str:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     user_id = payload.get("sub")
-    if not user_id:
+    if not user_id or not _is_uuid(user_id):
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     return user_id

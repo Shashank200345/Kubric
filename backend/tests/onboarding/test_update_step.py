@@ -24,7 +24,7 @@ import hashlib
 
 TEST_SECRET = "test-jwt-secret-key"
 
-def _make_jwt(sub: str = "user-123", secret: str = TEST_SECRET) -> str:
+def _make_jwt(sub: str = "12345678-1234-5678-1234-567812345678", secret: str = TEST_SECRET) -> str:
     """Create a signed JWT token for testing."""
     header = base64.urlsafe_b64encode(json.dumps({"alg": "HS256"}).encode()).rstrip(b"=").decode()
     payload = base64.urlsafe_b64encode(json.dumps({"sub": sub}).encode()).rstrip(b"=").decode()
@@ -77,7 +77,7 @@ class TestUpdateOnboardingStep:
     def test_idempotent_already_completed_step(self, mock_client_cls):
         """Re-completing an already-completed step returns current state unchanged."""
         existing_record = {
-            "user_id": "user-123",
+            "user_id": "12345678-1234-5678-1234-567812345678",
             "current_step": "cluster_name",
             "completed_steps": ["welcome"],
             "step_timestamps": {"welcome": "2025-01-15T10:30:00+00:00"},
