@@ -656,7 +656,13 @@ def _user_id_from_jwt(authorization: Optional[str]) -> Optional[str]:
         if exp and isinstance(exp, (int, float)) and datetime.now(timezone.utc).timestamp() > exp:
             return None
 
-        return payload.get("sub")
+        # Validate that sub claim conforms to UUID format before using in DB query filters
+        from app.insforge_client import _is_uuid
+        user_id = payload.get("sub")
+        if not user_id or not _is_uuid(user_id):
+            return None
+
+        return user_id
     except Exception:
         return None
 

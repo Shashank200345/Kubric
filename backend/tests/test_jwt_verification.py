@@ -27,15 +27,25 @@ def make_jwt(payload: dict, alg: str = "HS256", secret: str = SECRET) -> str:
 
 def test_user_id_from_jwt_valid(monkeypatch):
     monkeypatch.setenv("JWT_SECRET", SECRET)
-    payload = {"sub": "user_12345", "exp": int(time.time()) + 3600}
+    valid_uuid = "12345678-1234-5678-1234-567812345678"
+    payload = {"sub": valid_uuid, "exp": int(time.time()) + 3600}
     token = make_jwt(payload)
 
     res = _user_id_from_jwt(f"Bearer {token}")
-    assert res == "user_12345"
+    assert res == valid_uuid
+
+def test_user_id_from_jwt_non_uuid_sub(monkeypatch):
+    monkeypatch.setenv("JWT_SECRET", SECRET)
+    payload = {"sub": "user_12345,user_id=neq.0", "exp": int(time.time()) + 3600}
+    token = make_jwt(payload)
+
+    res = _user_id_from_jwt(f"Bearer {token}")
+    assert res is None
 
 def test_user_id_from_jwt_forged_signature(monkeypatch):
     monkeypatch.setenv("JWT_SECRET", SECRET)
-    payload = {"sub": "user_12345", "exp": int(time.time()) + 3600}
+    valid_uuid = "12345678-1234-5678-1234-567812345678"
+    payload = {"sub": valid_uuid, "exp": int(time.time()) + 3600}
     token = make_jwt(payload, secret="wrong-secret")
 
     res = _user_id_from_jwt(f"Bearer {token}")
