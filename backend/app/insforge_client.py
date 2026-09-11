@@ -185,7 +185,7 @@ class InsForgeClient:
 
     async def get_pending_actions(self, user_id: str, cluster_name: str) -> list[dict]:
         """Fetch pending actions and mark them as in_progress."""
-        if not self.url:
+        if not self.url or not _is_uuid(user_id):
             return []
         async with httpx.AsyncClient() as client:
             try:
@@ -214,7 +214,7 @@ class InsForgeClient:
 
     async def get_action(self, action_id: str, user_id: str) -> dict | None:
         """Fetch a single action's status/output, scoped to the owning user."""
-        if not self.url or not _is_uuid(action_id):
+        if not self.url or not _is_uuid(action_id) or not _is_uuid(user_id):
             return None
         async with httpx.AsyncClient() as client:
             try:
@@ -294,6 +294,8 @@ class InsForgeClient:
             return None
         query = f"cluster_name=eq.{cluster_name}"
         if user_id:
+            if not _is_uuid(user_id):
+                return None
             query += f"&user_id=eq.{user_id}"
         async with httpx.AsyncClient() as client:
             try:
@@ -314,6 +316,8 @@ class InsForgeClient:
             return []
         query = "select=cluster_name&order=cluster_name.asc"
         if user_id:
+            if not _is_uuid(user_id):
+                return []
             query += f"&user_id=eq.{user_id}"
         async with httpx.AsyncClient() as client:
             try:

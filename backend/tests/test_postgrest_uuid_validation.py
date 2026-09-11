@@ -40,6 +40,10 @@ async def test_insforge_client_uuid_validation(monkeypatch):
             action = await insforge.get_action(invalid_id, "user_123")
             assert action is None
 
+            # get_action with invalid user_id
+            action_inv_user = await insforge.get_action(VALID_UUID, invalid_id)
+            assert action_inv_user is None
+
             # update_action_result
             updated = await insforge.update_action_result(invalid_id, "success", {"msg": "done"})
             assert updated is False
@@ -48,6 +52,18 @@ async def test_insforge_client_uuid_validation(monkeypatch):
             user_id, cluster_name = await insforge.validate_cluster_token(invalid_id)
             assert user_id is None
             assert cluster_name is None
+
+            # get_pending_actions with invalid user_id
+            pending = await insforge.get_pending_actions(invalid_id, "default")
+            assert pending == []
+
+            # get_cluster_state with invalid user_id
+            state = await insforge.get_cluster_state("default", invalid_id)
+            assert state is None
+
+            # list_state_clusters with invalid user_id
+            clusters = await insforge.list_state_clusters(invalid_id)
+            assert clusters == []
 
         # Verify no HTTP calls were made for invalid UUIDs
         mock_get.assert_not_called()
