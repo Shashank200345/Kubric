@@ -13,11 +13,28 @@ Every tool is READ-ONLY. Nothing here can mutate the cluster.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Dict, List, Optional, Protocol
 
 from loguru import logger
 
 from app.kubernetes.executor import KubectlExecutor, KubectlError
+
+# Security: strict naming validation to prevent argument injection in kubectl commands
+_K8S_NAME_PATTERN = re.compile(r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$", re.IGNORECASE)
+
+def _validate_k8s_name(val: Optional[str], param_name: str = "name") -> Optional[str]:
+    """Validate resource name or namespace to prevent command/argument injection."""
+    if val is None:
+        return None
+    val = str(val).strip()
+    if not val:
+        return None
+    if val.startswith("-"):
+        raise ValueError(f"Invalid {param_name}: cannot start with '-'")
+    if not _K8S_NAME_PATTERN.match(val):
+        raise ValueError(f"Invalid {param_name}: '{val}' contains invalid characters")
+    return val
 
 # Caps to keep tool outputs (and therefore token usage) bounded.
 _MAX_ITEMS = 60
@@ -143,8 +160,9 @@ class LiveKubectlTools:
 
     async def list_pods(self, namespace: Optional[str] = None, only_unhealthy: bool = False) -> Any:
         try:
+            namespace = _validate_k8s_name(namespace, "namespace")
             data = KubectlExecutor.run(f"kubectl get pods {self._ns_flag(namespace)} -o json", parse_json=True, context=self.context)
-        except KubectlError as e:
+        except (KubectlError, ValueError) as e:
             return {"error": str(e)}
         rows = []
         for it in (data.get("items") or []):
@@ -170,8 +188,12 @@ class LiveKubectlTools:
 
     async def describe_pod(self, namespace: str, name: str) -> Any:
         try:
+            namespace = _validate_k8s_name(namespace, "namespace") or "default"
+            name = _validate_k8s_name(name, "name")
+            if not name:
+                return {"error": "Pod name is required"}
             it = KubectlExecutor.run(f"kubectl get pod {name} -n {namespace} -o json", parse_json=True, context=self.context)
-        except KubectlError as e:
+        except (KubectlError, ValueError) as e:
             return {"error": str(e)}
         spec, status = it.get("spec", {}), it.get("status", {})
         containers = [{
@@ -196,15 +218,22 @@ class LiveKubectlTools:
     async def get_pod_logs(self, namespace: str, name: str, previous: bool = False, tail_lines: int = 60) -> Any:
         prev = " --previous" if previous else ""
         try:
+            namespace = _validate_k8s_name(namespace, "namespace") or "default"
+            name = _validate_k8s_name(name, "name")
+            if not name:
+                return {"error": "Pod name is required"}
+            if not isinstance(tail_lines, int) or isinstance(tail_lines, bool) or tail_lines <= 0 or tail_lines > 5000:
+                tail_lines = 60
             out = KubectlExecutor.run(f"kubectl logs {name} -n {namespace} --tail={tail_lines}{prev}", parse_json=False, context=self.context)
-        except KubectlError as e:
+        except (KubectlError, ValueError) as e:
             return {"error": str(e)}
         return {"logs": _truncate(out or "(no logs)", _MAX_LOG_CHARS)}
 
     async def list_events(self, namespace: Optional[str] = None, name_contains: Optional[str] = None) -> Any:
         try:
+            namespace = _validate_k8s_name(namespace, "namespace")
             data = KubectlExecutor.run(f"kubectl get events {self._ns_flag(namespace)} -o json", parse_json=True, context=self.context)
-        except KubectlError as e:
+        except (KubectlError, ValueError) as e:
             return {"error": str(e)}
         rows = []
         for e in (data.get("items") or []):
@@ -221,8 +250,9 @@ class LiveKubectlTools:
 
     async def list_deployments(self, namespace: Optional[str] = None) -> Any:
         try:
+            namespace = _validate_k8s_name(namespace, "namespace")
             data = KubectlExecutor.run(f"kubectl get deploy {self._ns_flag(namespace)} -o json", parse_json=True, context=self.context)
-        except KubectlError as e:
+        except (KubectlError, ValueError) as e:
             return {"error": str(e)}
         rows = []
         for d in (data.get("items") or []):
