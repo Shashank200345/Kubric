@@ -13,6 +13,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import uuid
 from datetime import datetime, timezone
 
@@ -22,6 +23,8 @@ from loguru import logger
 from typing import Optional
 
 from app.insforge_client import _is_uuid
+
+_CLUSTER_NAME_PATTERN = re.compile(r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")
 from app.models.onboarding import (
     ONBOARDING_STEPS,
     ClusterTokenRequest,
@@ -408,6 +411,10 @@ async def send_invitations(
 @router.get("/heartbeat/{cluster_name}", response_model=HeartbeatResponse)
 async def get_heartbeat(cluster_name: str, user_id: str = Depends(get_current_user)):
     """Return whether a heartbeat has been received for the given cluster."""
+    # Validate cluster_name to prevent PostgREST query injection
+    if not cluster_name or not _CLUSTER_NAME_PATTERN.match(cluster_name):
+        return HeartbeatResponse(connected=False, first_heartbeat_at=None)
+
     insforge_url = os.getenv("INSFORGE_URL")
     insforge_api_key = os.getenv("INSFORGE_API_KEY")
 
