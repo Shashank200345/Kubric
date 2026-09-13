@@ -31,3 +31,8 @@
 **Vulnerability:** `get_current_user` in `backend/app/api/onboarding.py` extracted the `sub` claim from authenticated JWTs without validating that it conformed to a UUID format (matching the DB schema `user_id UUID NOT NULL`). A JWT signed with a non-UUID `sub` claim containing PostgREST filter operators (e.g. `sub="user_123,user_id=neq.0"`) could manipulate downstream PostgREST REST query parameters when making admin-privileged DB calls.
 **Learning:** Even when JWT signatures are cryptographically verified, extracted claim values used directly in database query filters or REST calls must be validated against expected data types (such as UUIDs).
 **Prevention:** Validate `sub` user ID claims against `_is_uuid(user_id)` during JWT authentication dependency checks before returning the user ID.
+
+## 2026-09-10 - Validate `cluster_name` Path Parameter Before PostgREST Filter Formatting
+**Vulnerability:** `get_heartbeat` in `backend/app/api/onboarding.py` formatted user-supplied `cluster_name` path parameters directly into PostgREST REST query filter strings (e.g., `cluster_name=eq.{cluster_name}`) using admin API key headers without validating its format. Path inputs containing PostgREST filter operators (e.g., `prod-cluster,id=neq.0`) could manipulate SQL queries against admin database endpoints.
+**Learning:** Route parameters used to build REST API filter parameters for PostgREST backend services must be strictly validated against domain regexes (RFC 1123 DNS label rules) to prevent filter injection.
+**Prevention:** Enforce RFC 1123 DNS label regex validation (`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`) on `cluster_name` parameters prior to constructing database query URLs.

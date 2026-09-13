@@ -167,6 +167,40 @@ async def test_heartbeat_returns_connected_true_when_heartbeat_exists(auth_heade
 
 
 @pytest.mark.asyncio
+async def test_heartbeat_returns_connected_false_for_invalid_cluster_name(auth_headers):
+    """When cluster_name format is invalid or contains PostgREST operators, returns connected=False without HTTP call."""
+    mock_client_instance = AsyncMock()
+
+    with patch("app.api.onboarding.os.getenv") as mock_getenv:
+        mock_getenv.side_effect = lambda key: {
+            "INSFORGE_URL": "https://test.insforge.app",
+            "INSFORGE_API_KEY": "test-api-key",
+            "JWT_SECRET": TEST_SECRET,
+        }.get(key)
+
+        with patch("app.api.onboarding.httpx.AsyncClient", return_value=mock_client_instance):
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                invalid_names = [
+                    "prod-cluster,id=neq.0",
+                    "' OR '1'='1",
+                    "-invalid-start",
+                    "invalid-end-",
+                    "invalid_underscore",
+                    "invalid..dot",
+                ]
+                for invalid_name in invalid_names:
+                    resp = await client.get(f"/api/v1/onboarding/heartbeat/{invalid_name}", headers=auth_headers)
+                    assert resp.status_code == 200
+                    data = resp.json()
+                    assert data["connected"] is False
+                    assert data["first_heartbeat_at"] is None
+
+    # Verify no HTTP calls were made for invalid cluster names
+    mock_client_instance.get.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_heartbeat_returns_connected_false_on_http_error(auth_headers):
     """When the InsForge API returns an error, returns connected=False gracefully."""
     from httpx import Response, Request
