@@ -2,9 +2,18 @@ import pytest
 from unittest.mock import patch, AsyncMock
 from fastapi.testclient import TestClient
 from app.main import app
-from app.insforge_client import InsForgeClient, _is_uuid
+from app.insforge_client import InsForgeClient, _is_uuid, _is_cluster_name
 
 client = TestClient(app)
+
+INVALID_CLUSTER_NAMES = [
+    "prod-cluster,id=neq.0",
+    "cluster1&user_id=eq.123",
+    "cluster1=eq.2",
+    "cluster1?select=*",
+    "' OR '1'='1",
+    "../../etc/passwd",
+]
 
 INVALID_UUIDS = [
     "invalid-uuid",
@@ -21,6 +30,14 @@ def test_is_uuid_helper():
     for invalid in INVALID_UUIDS:
         assert _is_uuid(invalid) is False
     assert _is_uuid("../../etc/passwd") is False
+
+
+def test_is_cluster_name_helper():
+    assert _is_cluster_name("my-cluster-1") is True
+    assert _is_cluster_name("prod_cluster.us-east") is True
+    for invalid in INVALID_CLUSTER_NAMES:
+        assert _is_cluster_name(invalid) is False
+    assert _is_cluster_name(None) is False
 
 @pytest.mark.asyncio
 async def test_insforge_client_uuid_validation(monkeypatch):
@@ -64,6 +81,16 @@ async def test_insforge_client_uuid_validation(monkeypatch):
             # list_state_clusters with invalid user_id
             clusters = await insforge.list_state_clusters(invalid_id)
             assert clusters == []
+
+            # get_cluster_state with invalid cluster_name
+            state_inv_cluster = await insforge.get_cluster_state("invalid,cluster=1", VALID_UUID)
+            assert state_inv_cluster is None
+
+        with patch("httpx.AsyncClient.post") as mock_post:
+            # upsert_cluster_state with invalid cluster_name
+            upsert_inv_cluster = await insforge.upsert_cluster_state(VALID_UUID, "invalid,cluster=1", {})
+            assert upsert_inv_cluster is False
+            mock_post.assert_not_called()
 
         # Verify no HTTP calls were made for invalid UUIDs
         mock_get.assert_not_called()
