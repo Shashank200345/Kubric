@@ -36,3 +36,8 @@
 **Vulnerability:** `get_heartbeat` in `backend/app/api/onboarding.py` formatted user-supplied `cluster_name` path parameters directly into PostgREST REST query filter strings (e.g., `cluster_name=eq.{cluster_name}`) using admin API key headers without validating its format. Path inputs containing PostgREST filter operators (e.g., `prod-cluster,id=neq.0`) could manipulate SQL queries against admin database endpoints.
 **Learning:** Route parameters used to build REST API filter parameters for PostgREST backend services must be strictly validated against domain regexes (RFC 1123 DNS label rules) to prevent filter injection.
 **Prevention:** Enforce RFC 1123 DNS label regex validation (`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`) on `cluster_name` parameters prior to constructing database query URLs.
+
+## 2026-09-11 - Validate cluster_name in InsForgeClient get/upsert cluster_state
+**Vulnerability:** `InsForgeClient.get_cluster_state` formatted `cluster_name` directly into PostgREST REST query filter strings (`f"cluster_name=eq.{cluster_name}"`) without validating its format, enabling PostgREST query filter injection when fetching cluster state snapshots.
+**Learning:** PostgREST helper methods interpolating resource name strings into REST query filters must validate those parameters before issuing requests to admin-privileged PostgREST endpoints.
+**Prevention:** Enforce `_is_cluster_name` regex validation (`^[a-zA-Z0-9_.-]{1,253}$`) on `cluster_name` in `InsForgeClient.get_cluster_state` and `upsert_cluster_state`.

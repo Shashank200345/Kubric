@@ -1,7 +1,17 @@
 import os
+import re
 import uuid
 import httpx
 from loguru import logger
+
+_CLUSTER_NAME_REGEX = re.compile(r"^[a-zA-Z0-9_.-]{1,253}$")
+
+
+def _is_cluster_name(value) -> bool:
+    """Return True if value is a valid cluster name string (prevents PostgREST query injection)."""
+    if not value or not isinstance(value, str):
+        return False
+    return bool(_CLUSTER_NAME_REGEX.match(value))
 
 
 def _is_uuid(value) -> bool:
@@ -256,7 +266,7 @@ class InsForgeClient:
         Store the latest cluster snapshot pushed by the in-cluster agent.
         Upserts on (user_id, cluster_name) so we always keep the most recent state.
         """
-        if not self.url:
+        if not self.url or not _is_uuid(user_id) or not _is_cluster_name(cluster_name):
             return False
         async with httpx.AsyncClient() as client:
             try:
@@ -290,7 +300,7 @@ class InsForgeClient:
 
     async def get_cluster_state(self, cluster_name: str, user_id: str | None = None) -> dict | None:
         """Read the latest stored snapshot for a cluster (optionally scoped to a user)."""
-        if not self.url:
+        if not self.url or not _is_cluster_name(cluster_name):
             return None
         query = f"cluster_name=eq.{cluster_name}"
         if user_id:
