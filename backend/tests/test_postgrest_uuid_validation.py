@@ -90,6 +90,12 @@ async def test_insforge_client_uuid_validation(monkeypatch):
             # upsert_cluster_state with invalid cluster_name
             upsert_inv_cluster = await insforge.upsert_cluster_state(VALID_UUID, "invalid,cluster=1", {})
             assert upsert_inv_cluster is False
+
+            # create_investigation with invalid cluster_context
+            for invalid_cluster in INVALID_CLUSTER_NAMES:
+                created_inv = await insforge.create_investigation(invalid_cluster, VALID_UUID)
+                assert created_inv is None
+
             mock_post.assert_not_called()
 
         # Verify no HTTP calls were made for invalid UUIDs
