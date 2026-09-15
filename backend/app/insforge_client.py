@@ -345,7 +345,12 @@ class InsForgeClient:
         """Create a new investigation record from a push agent."""
         if not self.url:
             return None
-            
+
+        # Validate cluster_context if provided to prevent invalid data or PostgREST injection
+        if cluster_context and not _is_cluster_name(cluster_context):
+            logger.warning(f"Invalid cluster_context format: {cluster_context}")
+            return None
+
         async with httpx.AsyncClient() as client:
             try:
                 # Prefer: return=representation tells PostgREST to return the inserted row
