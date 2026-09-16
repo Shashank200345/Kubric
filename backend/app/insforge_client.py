@@ -164,7 +164,7 @@ class InsForgeClient:
 
     async def create_action(self, investigation_id: str, action_type: str, params: dict, user_id: str, cluster_name: str) -> dict | None:
         """Create a new action."""
-        if not self.url:
+        if not self.url or not _is_uuid(investigation_id) or not _is_uuid(user_id) or not _is_cluster_name(cluster_name):
             return None
         async with httpx.AsyncClient() as client:
             try:
@@ -195,13 +195,13 @@ class InsForgeClient:
 
     async def get_pending_actions(self, user_id: str, cluster_name: str) -> list[dict]:
         """Fetch pending actions and mark them as in_progress."""
-        if not self.url or not _is_uuid(user_id):
+        if not self.url or not _is_uuid(user_id) or not _is_cluster_name(cluster_name):
             return []
         async with httpx.AsyncClient() as client:
             try:
                 # 1. Fetch pending actions
                 resp = await client.get(
-                    f"{self.base_url}/actions?user_id=eq.{user_id}&status=eq.pending&select=*",
+                    f"{self.base_url}/actions?user_id=eq.{user_id}&cluster_name=eq.{cluster_name}&status=eq.pending&select=*",
                     headers=self.headers,
                 )
                 resp.raise_for_status()
