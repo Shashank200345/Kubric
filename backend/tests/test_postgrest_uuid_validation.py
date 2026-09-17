@@ -70,9 +70,13 @@ async def test_insforge_client_uuid_validation(monkeypatch):
             assert user_id is None
             assert cluster_name is None
 
-            # get_pending_actions with invalid user_id
+            # get_pending_actions with invalid user_id or invalid cluster_name
             pending = await insforge.get_pending_actions(invalid_id, "default")
             assert pending == []
+
+            for invalid_cluster in INVALID_CLUSTER_NAMES:
+                pending_inv_cluster = await insforge.get_pending_actions(VALID_UUID, invalid_cluster)
+                assert pending_inv_cluster == []
 
             # get_cluster_state with invalid user_id
             state = await insforge.get_cluster_state("default", invalid_id)
@@ -95,6 +99,17 @@ async def test_insforge_client_uuid_validation(monkeypatch):
             for invalid_cluster in INVALID_CLUSTER_NAMES:
                 created_inv = await insforge.create_investigation(invalid_cluster, VALID_UUID)
                 assert created_inv is None
+
+                # create_action with invalid parameters
+                act1 = await insforge.create_action(VALID_UUID, "restart_pod", {}, VALID_UUID, invalid_cluster)
+                assert act1 is None
+
+            for invalid_id in INVALID_UUIDS:
+                act2 = await insforge.create_action(invalid_id, "restart_pod", {}, VALID_UUID, "default")
+                assert act2 is None
+
+                act3 = await insforge.create_action(VALID_UUID, "restart_pod", {}, invalid_id, "default")
+                assert act3 is None
 
             mock_post.assert_not_called()
 
