@@ -74,6 +74,11 @@ async def test_insforge_client_uuid_validation(monkeypatch):
             pending = await insforge.get_pending_actions(invalid_id, "default")
             assert pending == []
 
+            # get_pending_actions with invalid cluster_name
+            for invalid_cluster in INVALID_CLUSTER_NAMES:
+                pending_inv_cluster = await insforge.get_pending_actions(VALID_UUID, invalid_cluster)
+                assert pending_inv_cluster == []
+
             # get_cluster_state with invalid user_id
             state = await insforge.get_cluster_state("default", invalid_id)
             assert state is None

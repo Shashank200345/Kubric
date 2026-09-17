@@ -195,7 +195,7 @@ class InsForgeClient:
 
     async def get_pending_actions(self, user_id: str, cluster_name: str) -> list[dict]:
         """Fetch pending actions and mark them as in_progress."""
-        if not self.url or not _is_uuid(user_id):
+        if not self.url or not _is_uuid(user_id) or not _is_cluster_name(cluster_name):
             return []
         async with httpx.AsyncClient() as client:
             try:
