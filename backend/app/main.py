@@ -900,34 +900,36 @@ async def ingest_incident(request: AgentIngestRequest, background_tasks: Backgro
 
 from pydantic import Field
 
+_K8S_RESOURCE_PATTERN = r"^[a-zA-Z0-9]([-a-zA-Z0-9.]*[a-zA-Z0-9])?$"
+
 class RestartPodParams(BaseModel):
-    namespace: str
-    pod_name: str
+    namespace: str = Field(pattern=_K8S_RESOURCE_PATTERN)
+    pod_name: str = Field(pattern=_K8S_RESOURCE_PATTERN)
 
 class RollbackDeploymentParams(BaseModel):
-    namespace: str
-    deployment_name: str
+    namespace: str = Field(pattern=_K8S_RESOURCE_PATTERN)
+    deployment_name: str = Field(pattern=_K8S_RESOURCE_PATTERN)
     target_revision: Optional[int] = Field(None, ge=1)
 
 _RESOURCE_QTY_PATTERN = r"^[0-9]+([.][0-9]+)?(m|Ki|Mi|Gi|Ti|Pi|Ei|k|M|G|T|P|E)?$"
 
 class UpdateResourceLimitsParams(BaseModel):
-    namespace: str
-    deployment_name: str
-    container_name: str
+    namespace: str = Field(pattern=_K8S_RESOURCE_PATTERN)
+    deployment_name: str = Field(pattern=_K8S_RESOURCE_PATTERN)
+    container_name: str = Field(pattern=_K8S_RESOURCE_PATTERN)
     memory_limit: Optional[str] = Field(None, pattern=_RESOURCE_QTY_PATTERN)
     cpu_limit: Optional[str] = Field(None, pattern=_RESOURCE_QTY_PATTERN)
 
 class ScaleDeploymentParams(BaseModel):
-    namespace: str
-    deployment_name: str
+    namespace: str = Field(pattern=_K8S_RESOURCE_PATTERN)
+    deployment_name: str = Field(pattern=_K8S_RESOURCE_PATTERN)
     replicas: int = Field(ge=0, le=50)
 
 
 class UpdateEnvironmentVariableParams(BaseModel):
-    namespace: str
-    deployment_name: str
-    container_name: Optional[str] = None
+    namespace: str = Field(pattern=_K8S_RESOURCE_PATTERN)
+    deployment_name: str = Field(pattern=_K8S_RESOURCE_PATTERN)
+    container_name: Optional[str] = Field(None, pattern=_K8S_RESOURCE_PATTERN)
     env_name: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
     env_value: str
 

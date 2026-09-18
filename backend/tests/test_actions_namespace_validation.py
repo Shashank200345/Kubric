@@ -125,6 +125,11 @@ def test_create_action_invalid_env_name_pattern():
     ("memory_limit", "--output=json", "update_resource_limits", {"namespace": "default", "deployment_name": "web", "container_name": "app"}),
     ("cpu_limit", "100m; rm -rf /", "update_resource_limits", {"namespace": "default", "deployment_name": "web", "container_name": "app"}),
     ("replicas", 100, "scale_deployment", {"namespace": "default", "deployment_name": "web"}),
+    ("pod_name", "--all", "restart_pod", {"namespace": "default"}),
+    ("namespace", "--all", "restart_pod", {"pod_name": "my-pod"}),
+    ("deployment_name", "--all", "scale_deployment", {"namespace": "default", "replicas": 2}),
+    ("container_name", "--all", "update_resource_limits", {"namespace": "default", "deployment_name": "web", "memory_limit": "256Mi"}),
+    ("pod_name", "pod name with spaces", "restart_pod", {"namespace": "default"}),
 ])
 def test_create_action_invalid_parameter_validation(param_key, invalid_value, action_type, base_params):
     jwt = create_mock_jwt()
