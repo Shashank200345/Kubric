@@ -129,3 +129,59 @@ def test_get_investigation_progress_invalid_uuid():
 
         # Verify InsForgeClient HTTP calls were not triggered for progress GET
         mock_instance.get.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_get_pending_actions_filters_invalid_action_ids(monkeypatch):
+    monkeypatch.setenv("INSFORGE_URL", "https://mock.insforge.app")
+    monkeypatch.setenv("INSFORGE_API_KEY", "mock-key")
+
+    insforge = InsForgeClient()
+
+    mock_get_resp = AsyncMock()
+    mock_get_resp.raise_for_status = lambda: None
+    mock_get_resp.json = lambda: [
+        {"id": VALID_UUID, "action_type": "restart_pod"},
+        {"id": "invalid_id,status=eq.completed", "action_type": "scale"},
+        {"id": "12345", "action_type": "rollback"},
+    ]
+
+    mock_patch_resp = AsyncMock()
+    mock_patch_resp.raise_for_status = lambda: None
+
+    with patch("httpx.AsyncClient.get", return_value=mock_get_resp), \
+         patch("httpx.AsyncClient.patch", return_value=mock_patch_resp) as mock_patch:
+        actions = await insforge.get_pending_actions(VALID_UUID, "my-cluster")
+        assert len(actions) == 3
+        # Should only patch the valid UUID
+        mock_patch.assert_called_once()
+        patch_url = mock_patch.call_args[0][0]
+        assert f"id=in.({VALID_UUID})" in patch_url
+        assert "invalid_id" not in patch_url
+
+
+@pytest.mark.asyncio
+async def test_create_investigation_invalid_user_id(monkeypatch):
+    monkeypatch.setenv("INSFORGE_URL", "https://mock.insforge.app")
+    monkeypatch.setenv("INSFORGE_API_KEY", "mock-key")
+
+    insforge = InsForgeClient()
+
+    with patch("httpx.AsyncClient.post") as mock_post:
+        for invalid_id in INVALID_UUIDS:
+            result = await insforge.create_investigation("my-cluster", invalid_id)
+            assert result is None
+        mock_post.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_record_heartbeat_invalid_user_id():
+    from app.main import _record_heartbeat
+
+    with patch("httpx.AsyncClient.patch") as mock_patch, \
+         patch("httpx.AsyncClient.get") as mock_get:
+        for invalid_id in INVALID_UUIDS:
+            await _record_heartbeat(VALID_UUID, invalid_id)
+            await _record_heartbeat(invalid_id, VALID_UUID)
+        mock_patch.assert_not_called()
+        mock_get.assert_not_called()

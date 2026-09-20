@@ -41,3 +41,8 @@
 **Vulnerability:** `InsForgeClient.get_cluster_state` formatted `cluster_name` directly into PostgREST REST query filter strings (`f"cluster_name=eq.{cluster_name}"`) without validating its format, enabling PostgREST query filter injection when fetching cluster state snapshots.
 **Learning:** PostgREST helper methods interpolating resource name strings into REST query filters must validate those parameters before issuing requests to admin-privileged PostgREST endpoints.
 **Prevention:** Enforce `_is_cluster_name` regex validation (`^[a-zA-Z0-9_.-]{1,253}$`) on `cluster_name` in `InsForgeClient.get_cluster_state` and `upsert_cluster_state`.
+
+## 2026-09-12 - Validate Action IDs in get_pending_actions Before PostgREST Bulk Update
+**Vulnerability:** `get_pending_actions` in `InsForgeClient` extracted action IDs returned from DB queries and concatenated them into `id=in.({ids_str})` for a bulk PostgREST PATCH request without validating each action ID with `_is_uuid`. If action IDs contained commas or PostgREST query operators, it allowed PostgREST REST query filter manipulation.
+**Learning:** Even when reading IDs from API/database responses, values formatted into REST filter parameters (`id=in.(...)`) must be validated against expected UUID schemas before constructing filter strings.
+**Prevention:** Validate every ID in list transformations with `_is_uuid` before concatenating into PostgREST `in.(...)` query filter strings.
