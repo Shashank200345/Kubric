@@ -41,3 +41,8 @@
 **Vulnerability:** `InsForgeClient.get_cluster_state` formatted `cluster_name` directly into PostgREST REST query filter strings (`f"cluster_name=eq.{cluster_name}"`) without validating its format, enabling PostgREST query filter injection when fetching cluster state snapshots.
 **Learning:** PostgREST helper methods interpolating resource name strings into REST query filters must validate those parameters before issuing requests to admin-privileged PostgREST endpoints.
 **Prevention:** Enforce `_is_cluster_name` regex validation (`^[a-zA-Z0-9_.-]{1,253}$`) on `cluster_name` in `InsForgeClient.get_cluster_state` and `upsert_cluster_state`.
+
+## 2026-09-12 - Validate user_id in InsForgeClient create_investigation
+**Vulnerability:** `InsForgeClient.create_investigation` accepted unvalidated `user_id` string arguments when inserting investigation records using admin API keys without checking UUID format. Malicious `user_id` values containing special characters or query operators could be persisted or manipulated down the pipeline.
+**Learning:** Database creation helper methods receiving user/account identifiers must enforce data format constraints (such as UUID format) before constructing request payloads for admin DB calls.
+**Prevention:** Enforce `_is_uuid(user_id)` validation on `user_id` in `InsForgeClient.create_investigation` prior to issuing HTTP POST requests.

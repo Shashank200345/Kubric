@@ -105,6 +105,9 @@ async def test_insforge_client_uuid_validation(monkeypatch):
                 assert act1 is None
 
             for invalid_id in INVALID_UUIDS:
+                created_inv_user = await insforge.create_investigation("default", invalid_id)
+                assert created_inv_user is None
+
                 act2 = await insforge.create_action(invalid_id, "restart_pod", {}, VALID_UUID, "default")
                 assert act2 is None
 
