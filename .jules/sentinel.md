@@ -41,3 +41,8 @@
 **Vulnerability:** `InsForgeClient.get_cluster_state` formatted `cluster_name` directly into PostgREST REST query filter strings (`f"cluster_name=eq.{cluster_name}"`) without validating its format, enabling PostgREST query filter injection when fetching cluster state snapshots.
 **Learning:** PostgREST helper methods interpolating resource name strings into REST query filters must validate those parameters before issuing requests to admin-privileged PostgREST endpoints.
 **Prevention:** Enforce `_is_cluster_name` regex validation (`^[a-zA-Z0-9_.-]{1,253}$`) on `cluster_name` in `InsForgeClient.get_cluster_state` and `upsert_cluster_state`.
+
+## 2026-09-12 - Validate `cluster_context` and Enforce Auth/Scoping in `/ask`
+**Vulnerability:** The `/ask` endpoint in `backend/app/main.py` accepted an unvalidated `cluster_context` input parameter without checking for leading dashes or format, enabling option/query injection. Furthermore, in agent push mode (`KUBRIC_DATA_SOURCE=agent`), `/ask` lacked authentication checks and executed local `kubectl` subprocesses instead of querying stored user cluster state.
+**Learning:** Conversational / LLM endpoints that accept cluster context parameters must validate the context string format and enforce user authentication / data scoping when operating in agent push mode.
+**Prevention:** Validate `cluster_context` against `_is_cluster_name` and enforce `_require_user_in_agent_mode(authorization)` to serve user-scoped state in agent mode.
