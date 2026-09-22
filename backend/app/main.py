@@ -1474,43 +1474,65 @@ class AskRequest(BaseModel):
 
 
 @app.post("/ask")
-async def ask_kubric(request: AskRequest):
+async def ask_kubric(request: AskRequest, authorization: Optional[str] = Header(None)):
     """
     Conversational endpoint. Gathers a quick cluster snapshot and asks the LLM
     to answer, grounded in real state. Supports an optional image (screenshot,
     kubectl output, dashboard panel) for multimodal root-cause analysis.
     """
     from app.ai.llm import OpenRouterClient
+    from app.insforge_client import _is_cluster_name
     import json as _json
 
+    # Security: validate cluster_context format to prevent option injection or query injection
+    if request.cluster_context:
+        if request.cluster_context.startswith("-") or not _is_cluster_name(request.cluster_context):
+            raise HTTPException(status_code=400, detail="Invalid cluster_context format")
+
     snapshot_lines = []
-    try:
-        nodes_json = KubectlExecutor.run("kubectl get nodes -o json", parse_json=True, context=request.cluster_context)
-        snapshot_lines.append(f"Nodes: {len(nodes_json.get('items', []))}")
-    except Exception:
-        snapshot_lines.append("Nodes: unavailable")
-
-    try:
-        pods_json = KubectlExecutor.run(
-            "kubectl get pods -A --field-selector=status.phase=Running -o json",
-            parse_json=True, context=request.cluster_context
-        )
-        snapshot_lines.append(f"Running pods: {len(pods_json.get('items', []))}")
-    except Exception:
-        snapshot_lines.append("Running pods: unavailable")
-
-    try:
-        events_json = KubectlExecutor.run("kubectl get events -A -o json", parse_json=True, context=request.cluster_context)
-        warnings = [e for e in events_json.get("items", []) if e.get("type") == "Warning"]
-        recent_warnings = warnings[-5:]
-        if recent_warnings:
-            snapshot_lines.append("Recent warning events:")
-            for w in recent_warnings:
-                snapshot_lines.append(f"  - {w.get('reason')}: {w.get('message')}")
+    if _use_agent_source():
+        user_id = _require_user_in_agent_mode(authorization)
+        state = await InsForgeClient().get_cluster_state(request.cluster_context, user_id=user_id) if request.cluster_context else None
+        if state:
+            snapshot_lines.append(f"Nodes: {len(state.get('nodes', []))}")
+            snapshot_lines.append(f"Running pods: {len([p for p in state.get('pods', []) if p.get('status') == 'Running'])}")
+            warnings = [e for e in (state.get("events") or []) if e.get("type") == "Warning"][-5:]
+            if warnings:
+                snapshot_lines.append("Recent warning events:")
+                for w in warnings:
+                    snapshot_lines.append(f"  - {w.get('reason')}: {w.get('message')}")
+            else:
+                snapshot_lines.append("No recent warning events.")
         else:
-            snapshot_lines.append("No recent warning events.")
-    except Exception:
-        pass
+            snapshot_lines.append("Cluster state unavailable")
+    else:
+        try:
+            nodes_json = KubectlExecutor.run("kubectl get nodes -o json", parse_json=True, context=request.cluster_context)
+            snapshot_lines.append(f"Nodes: {len(nodes_json.get('items', []))}")
+        except Exception:
+            snapshot_lines.append("Nodes: unavailable")
+
+        try:
+            pods_json = KubectlExecutor.run(
+                "kubectl get pods -A --field-selector=status.phase=Running -o json",
+                parse_json=True, context=request.cluster_context
+            )
+            snapshot_lines.append(f"Running pods: {len(pods_json.get('items', []))}")
+        except Exception:
+            snapshot_lines.append("Running pods: unavailable")
+
+        try:
+            events_json = KubectlExecutor.run("kubectl get events -A -o json", parse_json=True, context=request.cluster_context)
+            warnings = [e for e in events_json.get("items", []) if e.get("type") == "Warning"]
+            recent_warnings = warnings[-5:]
+            if recent_warnings:
+                snapshot_lines.append("Recent warning events:")
+                for w in recent_warnings:
+                    snapshot_lines.append(f"  - {w.get('reason')}: {w.get('message')}")
+            else:
+                snapshot_lines.append("No recent warning events.")
+        except Exception:
+            pass
 
     snapshot = "\n".join(snapshot_lines)
 
