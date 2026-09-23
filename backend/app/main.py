@@ -417,11 +417,19 @@ async def get_investigation_progress(investigation_id: str, authorization: Optio
     if not _is_uuid(investigation_id):
         return {"progress": []}
 
+    user_id = _user_id_from_jwt(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
     # We use the backend's admin client to bypass RLS since the frontend anon_key is blocked
     client = InsForgeClient()
     if not client.url:
         return {"progress": []}
-        
+
+    inv_details = await client.get_investigation_details(investigation_id)
+    if not inv_details or inv_details.get("user_id") != user_id:
+        return {"progress": []}
+
     try:
         import httpx
         async with httpx.AsyncClient() as http:
