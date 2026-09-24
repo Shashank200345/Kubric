@@ -671,6 +671,10 @@ def _user_id_from_jwt(authorization: Optional[str]) -> Optional[str]:
 async def investigate_cluster(request: InvestigationRequest, authorization: Optional[str] = Header(None)):
     logger.info(f"Received request to investigate cluster (context: {request.cluster_context}).")
 
+    from app.insforge_client import _is_cluster_name
+    if request.cluster_context and not _is_cluster_name(request.cluster_context):
+        raise HTTPException(status_code=400, detail="Invalid cluster_context format")
+
     # Initialize the client with the user's JWT so it passes RLS checks
     client = InsForgeClient(user_jwt=authorization)
 

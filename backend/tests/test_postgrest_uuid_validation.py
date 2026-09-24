@@ -129,3 +129,13 @@ def test_get_investigation_progress_invalid_uuid():
 
         # Verify InsForgeClient HTTP calls were not triggered for progress GET
         mock_instance.get.assert_not_called()
+
+
+def test_post_investigate_invalid_cluster_context():
+    for invalid_cluster in INVALID_CLUSTER_NAMES:
+        response = client.post(
+            "/investigate",
+            json={"investigation_id": "inv_123", "cluster_context": invalid_cluster},
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Invalid cluster_context format"
