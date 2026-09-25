@@ -41,3 +41,8 @@
 **Vulnerability:** `InsForgeClient.get_cluster_state` formatted `cluster_name` directly into PostgREST REST query filter strings (`f"cluster_name=eq.{cluster_name}"`) without validating its format, enabling PostgREST query filter injection when fetching cluster state snapshots.
 **Learning:** PostgREST helper methods interpolating resource name strings into REST query filters must validate those parameters before issuing requests to admin-privileged PostgREST endpoints.
 **Prevention:** Enforce `_is_cluster_name` regex validation (`^[a-zA-Z0-9_.-]{1,253}$`) on `cluster_name` in `InsForgeClient.get_cluster_state` and `upsert_cluster_state`.
+
+## 2026-09-12 - Case-Insensitive System Namespace Validation in Actions Endpoint & Agent
+**Vulnerability:** `create_action` in `backend/app/main.py` checked raw `namespace` against `blocked_namespaces` without stripping whitespace or lowercasing input strings (e.g. `namespace="Kube-System"`), allowing protection bypass and execution of actions against restricted system control plane namespaces. Furthermore, `agent/main.py` executed pending actions without enforcing system namespace checks.
+**Learning:** Checking parameter values against exact string blocklists without string normalization (`strip().lower()`) opens security controls to simple case-sensitivity bypasses, especially when downstream CLI tools or Kubernetes APIs treat resource names case-insensitively or after normalization.
+**Prevention:** Always normalize input parameter strings (`str(val).strip().lower()`) before comparing against blocked namespace lists, and enforce defense-in-depth namespace checks on both the backend API and the in-cluster agent executor.

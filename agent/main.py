@@ -260,8 +260,9 @@ def handle_update_image(params: dict) -> dict:
         namespace=params["namespace"]
     )
     containers = []
+    target_container = params.get("container_name")
     for c in deployment.spec.template.spec.containers:
-        if c.name == params["container_name"]:
+        if not target_container or c.name == target_container:
             containers.append({
                 "name": c.name,
                 "image": params["image"]
@@ -286,7 +287,8 @@ def handle_update_image(params: dict) -> dict:
         namespace=params["namespace"],
         body=body
     )
-    return {"message": f"Updated image for container '{params['container_name']}' in deployment '{params['deployment_name']}' to '{params['image']}'."}
+    c_label = target_container or "all"
+    return {"message": f"Updated image for container '{c_label}' in deployment '{params['deployment_name']}' to '{params['image']}'."}
 
 def handle_update_environment_variable(params: dict) -> dict:
     deployment = apps_v1.read_namespaced_deployment(
@@ -294,8 +296,9 @@ def handle_update_environment_variable(params: dict) -> dict:
         namespace=params["namespace"]
     )
     containers = []
+    target_container = params.get("container_name")
     for c in deployment.spec.template.spec.containers:
-        if c.name == params["container_name"]:
+        if not target_container or c.name == target_container:
             env_vars = c.env or []
             # Check if env exists
             found = False
@@ -332,7 +335,10 @@ def handle_update_environment_variable(params: dict) -> dict:
         namespace=params["namespace"],
         body=body
     )
-    return {"message": f"Updated environment variable '{params['env_name']}' for container '{params['container_name']}' in deployment '{params['deployment_name']}'."}
+    c_label = target_container or "all"
+    return {"message": f"Updated environment variable '{params['env_name']}' for container '{c_label}' in deployment '{params['deployment_name']}'."}
+
+BLOCKED_NAMESPACES = {"kube-system", "kube-public", "kube-node-lease", "kubric-system"}
 
 ACTION_HANDLERS = {
     "restart_pod": handle_restart_pod,
@@ -364,28 +370,34 @@ async def _fetch_and_execute_actions() -> None:
                     
                     logger.info(f"[agent] Executing pending action {action_id} ({action_type})")
                     
-                    # Execute
-                    try:
-                        handler = ACTION_HANDLERS.get(action_type)
-                        if not handler:
-                            raise Exception(f"Unknown action_type: {action_type}")
-                            
-                        result_dict = handler(params)
-                        status = "success"
-                        output = result_dict
-                    except ApiException as e:
-                        if e.status == 404:
-                            status = "failed"
-                            output = {"error": f"Resource not found (404) in namespace '{params.get('namespace', 'unknown')}' — it may have already been deleted, renamed, or resolved manually before this action ran."}
-                        elif e.status == 409:
-                            status = "failed"
-                            output = {"error": f"Conflict updating resource (409) — it was modified concurrently. Not applied; consider re-running diagnosis for fresh evidence."}
-                        else:
-                            status = "failed"
-                            output = {"error": f"Kubernetes API error ({e.status}): {e.reason}"}
-                    except Exception as e:
+                    ns = str(params.get("namespace", "")).strip().lower()
+                    if ns in BLOCKED_NAMESPACES:
+                        logger.warning(f"[agent] Blocked action execution in system namespace: {ns}")
                         status = "failed"
-                        output = {"error": str(e)}
+                        output = {"error": "Cannot execute actions in system namespaces"}
+                    else:
+                        # Execute
+                        try:
+                            handler = ACTION_HANDLERS.get(action_type)
+                            if not handler:
+                                raise Exception(f"Unknown action_type: {action_type}")
+
+                            result_dict = handler(params)
+                            status = "success"
+                            output = result_dict
+                        except ApiException as e:
+                            if e.status == 404:
+                                status = "failed"
+                                output = {"error": f"Resource not found (404) in namespace '{params.get('namespace', 'unknown')}' — it may have already been deleted, renamed, or resolved manually before this action ran."}
+                            elif e.status == 409:
+                                status = "failed"
+                                output = {"error": f"Conflict updating resource (409) — it was modified concurrently. Not applied; consider re-running diagnosis for fresh evidence."}
+                            else:
+                                status = "failed"
+                                output = {"error": f"Kubernetes API error ({e.status}): {e.reason}"}
+                        except Exception as e:
+                            status = "failed"
+                            output = {"error": str(e)}
                         
                     # Post result
                     result_url = f"{backend_url}/{action_id}/result"
