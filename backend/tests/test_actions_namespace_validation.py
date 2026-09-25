@@ -13,7 +13,16 @@ def create_mock_jwt(user_id="user_123"):
     signature = "signature"
     return f"{header}.{payload}.{signature}"
 
-@pytest.mark.parametrize("namespace", ["kube-system", "kube-public", "kube-node-lease", "kubric-system"])
+@pytest.mark.parametrize("namespace", [
+    "kube-system",
+    "Kube-System",
+    "KUBE-SYSTEM",
+    "kube-public",
+    "KUBE-PUBLIC",
+    "kube-node-lease",
+    "kubric-system",
+    "Kubric-System",
+])
 def test_create_action_blocked_namespaces(namespace):
     jwt = create_mock_jwt()
     response = client.post(
