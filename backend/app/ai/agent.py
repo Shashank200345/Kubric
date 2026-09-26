@@ -171,22 +171,83 @@ class KubernetesAIAgent:
         return None
 
     def _generate_safe_kubectl_command(self, action_type: str, params: Dict[str, Any]) -> str:
-        ns = params.get("namespace", "default")
+        # Security helper validation regexes
+        dns_pattern = re.compile(r"^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$")
+        env_pattern = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+        res_limit_pattern = re.compile(r"^[0-9]+[mKMGTPi]*$")
+
+        ns = str(params.get("namespace") or "default")
+        if not dns_pattern.match(ns) or ns.startswith("-"):
+            return ""
+
         if action_type == "restart_pod":
-            return f"kubectl delete pod {params.get('pod_name', '')} -n {ns}"
+            pod_name = str(params.get("pod_name") or "")
+            if not pod_name or not dns_pattern.match(pod_name) or pod_name.startswith("-"):
+                return ""
+            return f"kubectl delete pod {pod_name} -n {ns}"
+
         elif action_type == "rollback_deployment":
-            rev = f" --to-revision={params.get('target_revision')}" if params.get("target_revision") else ""
-            return f"kubectl rollout undo deployment/{params.get('deployment_name', '')} -n {ns}{rev}"
+            dep_name = str(params.get("deployment_name") or "")
+            if not dep_name or not dns_pattern.match(dep_name) or dep_name.startswith("-"):
+                return ""
+            rev_val = params.get("target_revision")
+            rev_str = ""
+            if rev_val is not None:
+                if not str(rev_val).isdigit():
+                    return ""
+                rev_str = f" --to-revision={rev_val}"
+            return f"kubectl rollout undo deployment/{dep_name} -n {ns}{rev_str}"
+
         elif action_type == "update_resource_limits":
+            dep_name = str(params.get("deployment_name") or "")
+            container_name = str(params.get("container_name") or "")
+            if not dep_name or not dns_pattern.match(dep_name) or dep_name.startswith("-"):
+                return ""
+            if not container_name or not dns_pattern.match(container_name) or container_name.startswith("-"):
+                return ""
+
             limits = []
-            if params.get("cpu_limit"): limits.append(f"cpu={params.get('cpu_limit')}")
-            if params.get("memory_limit"): limits.append(f"memory={params.get('memory_limit')}")
+            cpu = params.get("cpu_limit")
+            if cpu:
+                cpu_str = str(cpu)
+                if not res_limit_pattern.match(cpu_str) or cpu_str.startswith("-"):
+                    return ""
+                limits.append(f"cpu={cpu_str}")
+
+            mem = params.get("memory_limit")
+            if mem:
+                mem_str = str(mem)
+                if not res_limit_pattern.match(mem_str) or mem_str.startswith("-"):
+                    return ""
+                limits.append(f"memory={mem_str}")
+
+            if not limits:
+                return ""
             limit_str = ", ".join(limits)
-            return f"kubectl set resources deployment/{params.get('deployment_name', '')} -c={params.get('container_name', '')} --limits={limit_str} -n {ns}"
+            return f"kubectl set resources deployment/{dep_name} -c={container_name} --limits={limit_str} -n {ns}"
+
         elif action_type == "scale_deployment":
-            return f"kubectl scale deployment/{params.get('deployment_name', '')} --replicas={params.get('replicas', '0')} -n {ns}"
+            dep_name = str(params.get("deployment_name") or "")
+            if not dep_name or not dns_pattern.match(dep_name) or dep_name.startswith("-"):
+                return ""
+            replicas = str(params.get("replicas") if params.get("replicas") is not None else "0")
+            if not replicas.isdigit():
+                return ""
+            return f"kubectl scale deployment/{dep_name} --replicas={replicas} -n {ns}"
+
         elif action_type == "update_environment_variable":
-            return f"kubectl set env deployment/{params.get('deployment_name', '')} {params.get('env_name', '')}={params.get('env_value', '')} -n {ns}"
+            dep_name = str(params.get("deployment_name") or "")
+            env_name = str(params.get("env_name") or "")
+            env_val = str(params.get("env_value") if params.get("env_value") is not None else "")
+            if not dep_name or not dns_pattern.match(dep_name) or dep_name.startswith("-"):
+                return ""
+            if not env_name or not env_pattern.match(env_name) or env_name.startswith("-"):
+                return ""
+            # Validate env_val does not contain command injection or option injection characters
+            if any(char in env_val for char in ["\n", "\r", ";", "&", "|", "`", "$", "'", '"', "\\"]) or env_val.startswith("-"):
+                return ""
+            return f"kubectl set env deployment/{dep_name} {env_name}={env_val} -n {ns}"
+
         return ""
 
     def _passes_deterministic_backstop(self, root_cause: str, action_type: str) -> bool:
