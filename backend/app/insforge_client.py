@@ -209,13 +209,17 @@ class InsForgeClient:
                 
                 # 2. Update their status to in_progress to avoid race conditions
                 if actions:
-                    action_ids = [action['id'] for action in actions]
-                    ids_str = ",".join(action_ids)
-                    await client.patch(
-                        f"{self.base_url}/actions?id=in.({ids_str})",
-                        headers=self.headers,
-                        json={"status": "in_progress"}
-                    )
+                    action_ids = [
+                        a["id"] for a in actions
+                        if isinstance(a, dict) and isinstance(a.get("id"), str) and _is_uuid(a["id"])
+                    ]
+                    if action_ids:
+                        ids_str = ",".join(action_ids)
+                        await client.patch(
+                            f"{self.base_url}/actions?id=in.({ids_str})",
+                            headers=self.headers,
+                            json={"status": "in_progress"}
+                        )
                 
                 return actions
             except Exception as e:
@@ -361,6 +365,9 @@ class InsForgeClient:
                 }
                 
                 if user_id:
+                    if not _is_uuid(user_id):
+                        logger.warning(f"Invalid user_id format in create_investigation: {user_id}")
+                        return None
                     payload["user_id"] = user_id
                 else:
                     logger.warning("No user_id provided for investigation creation. RLS policies may hide this row.")
