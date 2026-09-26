@@ -159,6 +159,11 @@ async def cli_get_status(cluster: str = "", authorization: Optional[str] = Heade
     """Return a status snapshot for the CLI's `kubric status` command."""
     if not authorization:
         raise HTTPException(status_code=401, detail="Not authenticated")
+
+    if cluster:
+        from app.insforge_client import _is_cluster_name
+        if cluster.startswith("-") or not _is_cluster_name(cluster):
+            raise HTTPException(status_code=400, detail="Invalid cluster name")
     
     def _fetch_cluster_status():
         """Synchronous kubectl calls — run in thread pool."""
@@ -170,7 +175,7 @@ async def cli_get_status(cluster: str = "", authorization: Optional[str] = Heade
             
             try:
                 pods_json = KE.run(
-                    "kubectl get pods -A -o json", parse_json=True
+                    "kubectl get pods -A -o json", parse_json=True, context=cluster if cluster else None
                 )
                 all_pods = pods_json.get("items", [])
                 pods_total = len(all_pods)
