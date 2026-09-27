@@ -41,3 +41,8 @@
 **Vulnerability:** `InsForgeClient.get_cluster_state` formatted `cluster_name` directly into PostgREST REST query filter strings (`f"cluster_name=eq.{cluster_name}"`) without validating its format, enabling PostgREST query filter injection when fetching cluster state snapshots.
 **Learning:** PostgREST helper methods interpolating resource name strings into REST query filters must validate those parameters before issuing requests to admin-privileged PostgREST endpoints.
 **Prevention:** Enforce `_is_cluster_name` regex validation (`^[a-zA-Z0-9_.-]{1,253}$`) on `cluster_name` in `InsForgeClient.get_cluster_state` and `upsert_cluster_state`.
+
+## 2026-09-26 - Reject Leading Dashes in Resource Name Validation Helpers
+**Vulnerability:** `_is_cluster_name` validated cluster names against `^[a-zA-Z0-9_.-]{1,253}$`, which permitted strings starting with dashes (e.g. `--all` or `-n`). When used in CLI commands or option parameters, leading dashes trigger option injection.
+**Learning:** Generic regexes allowing dashes in resource names can match leading dashes, which are interpreted by CLI programs (like `kubectl`) as flags rather than positional arguments or values.
+**Prevention:** Always explicitly reject leading dashes (`value.startswith("-")`) in input validation helper functions for resource names.

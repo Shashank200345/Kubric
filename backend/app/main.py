@@ -162,7 +162,7 @@ async def cli_get_status(cluster: str = "", authorization: Optional[str] = Heade
 
     if cluster:
         from app.insforge_client import _is_cluster_name
-        if cluster.startswith("-") or not _is_cluster_name(cluster):
+        if not _is_cluster_name(cluster):
             raise HTTPException(status_code=400, detail="Invalid cluster name")
     
     def _fetch_cluster_status():
