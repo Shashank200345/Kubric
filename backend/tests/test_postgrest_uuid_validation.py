@@ -111,6 +111,9 @@ async def test_insforge_client_uuid_validation(monkeypatch):
                 act3 = await insforge.create_action(VALID_UUID, "restart_pod", {}, invalid_id, "default")
                 assert act3 is None
 
+                created_inv_user = await insforge.create_investigation("default", invalid_id)
+                assert created_inv_user is None
+
             mock_post.assert_not_called()
 
         # Verify no HTTP calls were made for invalid UUIDs
@@ -129,3 +132,18 @@ def test_get_investigation_progress_invalid_uuid():
 
         # Verify InsForgeClient HTTP calls were not triggered for progress GET
         mock_instance.get.assert_not_called()
+
+@pytest.mark.asyncio
+async def test_record_heartbeat_uuid_validation(monkeypatch):
+    monkeypatch.setenv("INSFORGE_URL", "https://mock.insforge.app")
+    monkeypatch.setenv("INSFORGE_API_KEY", "mock-key")
+
+    from app.main import _record_heartbeat
+
+    with patch("httpx.AsyncClient.patch") as mock_patch, patch("httpx.AsyncClient.get") as mock_get:
+        for invalid_id in INVALID_UUIDS:
+            await _record_heartbeat(invalid_id, VALID_UUID)
+            await _record_heartbeat(VALID_UUID, invalid_id)
+
+        mock_patch.assert_not_called()
+        mock_get.assert_not_called()

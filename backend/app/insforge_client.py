@@ -351,6 +351,10 @@ class InsForgeClient:
             logger.warning(f"Invalid cluster_context format: {cluster_context}")
             return None
 
+        if user_id and not _is_uuid(user_id):
+            logger.warning(f"Invalid user_id format for investigation creation: {user_id}")
+            return None
+
         async with httpx.AsyncClient() as client:
             try:
                 # Prefer: return=representation tells PostgREST to return the inserted row
