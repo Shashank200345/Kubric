@@ -448,8 +448,9 @@ def _build_action_argv(action_type: str, params: Dict[str, Any], context: Option
     cross-platform quoting issues. Returns None for unknown actions.
     """
     import re
+    from app.insforge_client import _is_cluster_name
     ns = str(params.get("namespace") or "default")
-    if ns.startswith("-") or (context and context.startswith("-")):
+    if ns.startswith("-") or (context and (context.startswith("-") or not _is_cluster_name(context))):
         return None
     base = ["kubectl"]
     if context:
