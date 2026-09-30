@@ -42,6 +42,10 @@
 **Learning:** PostgREST helper methods interpolating resource name strings into REST query filters must validate those parameters before issuing requests to admin-privileged PostgREST endpoints.
 **Prevention:** Enforce `_is_cluster_name` regex validation (`^[a-zA-Z0-9_.-]{1,253}$`) on `cluster_name` in `InsForgeClient.get_cluster_state` and `upsert_cluster_state`.
 
+## 2026-09-26 - Reject Leading Dashes in Resource Name Validation Helpers
+**Vulnerability:** `_is_cluster_name` validated cluster names against `^[a-zA-Z0-9_.-]{1,253}$`, which permitted strings starting with dashes (e.g. `--all` or `-n`). When used in CLI commands or option parameters, leading dashes trigger option injection.
+**Learning:** Generic regexes allowing dashes in resource names can match leading dashes, which are interpreted by CLI programs (like `kubectl`) as flags rather than positional arguments or values.
+**Prevention:** Always explicitly reject leading dashes (`value.startswith("-")`) in input validation helper functions for resource names.
 ## 2026-09-28 - Validate cluster_token and user_id in validate_cluster_token, _record_heartbeat, and create_investigation
 **Vulnerability:** `validate_cluster_token`, `_record_heartbeat`, and `create_investigation` formatted raw `cluster_token` and `user_id` string parameters into admin PostgREST REST query filter URLs or database payloads without validating UUID format, exposing admin database queries to filter injection manipulation.
 **Learning:** Request header values (such as Bearer tokens or user IDs) passed directly into PostgREST query filter parameter URLs must be strictly validated before issuing admin requests.

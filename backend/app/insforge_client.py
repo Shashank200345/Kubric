@@ -8,8 +8,8 @@ _CLUSTER_NAME_REGEX = re.compile(r"^[a-zA-Z0-9_.-]{1,253}$")
 
 
 def _is_cluster_name(value) -> bool:
-    """Return True if value is a valid cluster name string (prevents PostgREST query injection)."""
-    if not value or not isinstance(value, str):
+    """Return True if value is a valid cluster name string (prevents PostgREST query injection and option injection)."""
+    if not value or not isinstance(value, str) or value.startswith("-"):
         return False
     return bool(_CLUSTER_NAME_REGEX.match(value))
 
