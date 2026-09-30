@@ -18,18 +18,11 @@ def test_kubectl_executor_safe_invocation():
         assert args[0] == ["kubectl", "--request-timeout=5s", "--context=my-context", "get", "pods", "-A"]
 
 def test_kubectl_executor_context_command_injection_prevented():
-    with patch("subprocess.run") as mock_run:
-        mock_result = MagicMock()
-        mock_result.stdout = "ok"
-        mock_run.return_value = mock_result
-
-        malicious_context = "dev; touch /tmp/pwned"
+    from app.kubernetes.executor import KubectlError
+    malicious_context = "dev; touch /tmp/pwned"
+    with pytest.raises(KubectlError) as exc_info:
         KubectlExecutor.run("kubectl get pods", context=malicious_context)
-
-        mock_run.assert_called_once()
-        args, kwargs = mock_run.call_args
-        assert kwargs.get("shell") is False
-        assert args[0] == ["kubectl", "--request-timeout=5s", f"--context={malicious_context}", "get", "pods"]
+    assert "Invalid cluster context:" in str(exc_info.value)
 
 def test_kubectl_executor_flag_context_rejected():
     from app.kubernetes.executor import KubectlError

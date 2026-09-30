@@ -44,7 +44,8 @@ class KubectlExecutor:
         
         global _last_unreachable_log
 
-        if context and context.startswith("-"):
+        from app.insforge_client import _is_cluster_name
+        if context and (context.startswith("-") or not _is_cluster_name(context)):
             raise KubectlError(f"Invalid cluster context: {context}.")
 
         cmd_args = shlex.split(command)

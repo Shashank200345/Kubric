@@ -46,3 +46,17 @@
 **Vulnerability:** `_is_cluster_name` validated cluster names against `^[a-zA-Z0-9_.-]{1,253}$`, which permitted strings starting with dashes (e.g. `--all` or `-n`). When used in CLI commands or option parameters, leading dashes trigger option injection.
 **Learning:** Generic regexes allowing dashes in resource names can match leading dashes, which are interpreted by CLI programs (like `kubectl`) as flags rather than positional arguments or values.
 **Prevention:** Always explicitly reject leading dashes (`value.startswith("-")`) in input validation helper functions for resource names.
+## 2026-09-28 - Validate cluster_token and user_id in validate_cluster_token, _record_heartbeat, and create_investigation
+**Vulnerability:** `validate_cluster_token`, `_record_heartbeat`, and `create_investigation` formatted raw `cluster_token` and `user_id` string parameters into admin PostgREST REST query filter URLs or database payloads without validating UUID format, exposing admin database queries to filter injection manipulation.
+**Learning:** Request header values (such as Bearer tokens or user IDs) passed directly into PostgREST query filter parameter URLs must be strictly validated before issuing admin requests.
+**Prevention:** Validate `cluster_token` and `user_id` against `_is_uuid` before executing PostgREST database queries or background heartbeat updates.
+
+## 2026-10-01 - Validate Cluster Context Name Format in KubectlExecutor and Action Builder
+**Vulnerability:** `KubectlExecutor.run` and `_build_action_argv` only checked if `context` parameters started with `-` (leading dash check) without validating that `context` conformed to valid cluster name format (`_is_cluster_name`), allowing malformed context parameters with spaces, control characters, or option flags to be passed into subprocess execution or action command builders.
+**Learning:** Checking only `context.startswith("-")` allows invalid or option-manipulating context strings that contain spaces or special characters to be passed to CLI command builders.
+**Prevention:** Enforce strict domain name/cluster name regex validation (`_is_cluster_name`) on all context parameters before injecting them into `kubectl` arguments or action execution lists.
+
+## 2026-10-05 - Enforce User ID Ownership Scope in update_action_result
+**Vulnerability:** `update_action_result` patched action database rows using `f"{self.base_url}/actions?id=eq.{action_id}"` with admin API key headers without scoping the query to the authenticated `user_id`, enabling an attacker with a valid cluster token to tamper with the execution status/output of another user's action ID (IDOR).
+**Learning:** Performing database update queries with admin credentials based solely on a record ID allows cross-tenant state manipulation unless explicitly scoped by the owner's `user_id`.
+**Prevention:** Always pass and filter by `user_id=eq.{user_id}` on admin PostgREST update queries to guarantee cross-tenant authorization checks.

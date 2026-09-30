@@ -65,6 +65,10 @@ async def test_insforge_client_uuid_validation(monkeypatch):
             updated = await insforge.update_action_result(invalid_id, "success", {"msg": "done"})
             assert updated is False
 
+            # update_action_result with invalid user_id
+            updated_inv_user = await insforge.update_action_result(VALID_UUID, "success", {"msg": "done"}, user_id=invalid_id)
+            assert updated_inv_user is False
+
             # validate_cluster_token
             user_id, cluster_name = await insforge.validate_cluster_token(invalid_id)
             assert user_id is None
@@ -111,6 +115,9 @@ async def test_insforge_client_uuid_validation(monkeypatch):
                 act3 = await insforge.create_action(VALID_UUID, "restart_pod", {}, invalid_id, "default")
                 assert act3 is None
 
+                created_inv_user = await insforge.create_investigation("default", invalid_id)
+                assert created_inv_user is None
+
             mock_post.assert_not_called()
 
         # Verify no HTTP calls were made for invalid UUIDs
@@ -129,3 +136,40 @@ def test_get_investigation_progress_invalid_uuid():
 
         # Verify InsForgeClient HTTP calls were not triggered for progress GET
         mock_instance.get.assert_not_called()
+
+@pytest.mark.asyncio
+async def test_update_action_result_user_id_scoping(monkeypatch):
+    monkeypatch.setenv("INSFORGE_URL", "https://mock.insforge.app")
+    monkeypatch.setenv("INSFORGE_API_KEY", "mock-key")
+
+    insforge = InsForgeClient()
+    action_id = VALID_UUID
+    user_id = "87654321-4321-8765-4321-876543218765"
+
+    with patch("httpx.AsyncClient.patch") as mock_patch:
+        mock_response = AsyncMock()
+        mock_response.raise_for_status = lambda: None
+        mock_patch.return_value = mock_response
+
+        # Scoped call
+        res = await insforge.update_action_result(action_id, "success", {"message": "ok"}, user_id=user_id)
+        assert res is True
+        mock_patch.assert_called_once()
+        args, kwargs = mock_patch.call_args
+        assert f"actions?id=eq.{action_id}&user_id=eq.{user_id}" in args[0]
+
+
+@pytest.mark.asyncio
+async def test_record_heartbeat_uuid_validation(monkeypatch):
+    monkeypatch.setenv("INSFORGE_URL", "https://mock.insforge.app")
+    monkeypatch.setenv("INSFORGE_API_KEY", "mock-key")
+
+    from app.main import _record_heartbeat
+
+    with patch("httpx.AsyncClient.patch") as mock_patch, patch("httpx.AsyncClient.get") as mock_get:
+        for invalid_id in INVALID_UUIDS:
+            await _record_heartbeat(invalid_id, VALID_UUID)
+            await _record_heartbeat(VALID_UUID, invalid_id)
+
+        mock_patch.assert_not_called()
+        mock_get.assert_not_called()

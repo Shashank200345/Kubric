@@ -448,8 +448,9 @@ def _build_action_argv(action_type: str, params: Dict[str, Any], context: Option
     cross-platform quoting issues. Returns None for unknown actions.
     """
     import re
+    from app.insforge_client import _is_cluster_name
     ns = str(params.get("namespace") or "default")
-    if ns.startswith("-") or (context and context.startswith("-")):
+    if ns.startswith("-") or (context and (context.startswith("-") or not _is_cluster_name(context))):
         return None
     base = ["kubectl"]
     if context:
@@ -765,8 +766,8 @@ async def process_incident_background(investigation_id: str, evidence: dict):
 async def _record_heartbeat(cluster_token: str, user_id: str):
     """Update clusters.last_heartbeat_at and mark onboarding connection as verified if needed."""
     from app.insforge_client import _is_uuid
-    if not _is_uuid(cluster_token):
-        logger.warning("Cannot record heartbeat: Invalid cluster_token UUID format")
+    if not _is_uuid(cluster_token) or not _is_uuid(user_id):
+        logger.warning("Cannot record heartbeat: Invalid cluster_token or user_id UUID format")
         return
 
     insforge_url = os.getenv("INSFORGE_URL", "")
@@ -1012,7 +1013,7 @@ async def create_action(request: ActionCreateRequest, authorization: Optional[st
         )
         action_id = action.get("id")
         if action_id:
-            await client.update_action_result(action_id, exec_status, {"message": exec_output})
+            await client.update_action_result(action_id, exec_status, {"message": exec_output}, user_id=user_id)
 
         return {
             **action,
@@ -1059,8 +1060,12 @@ async def update_action_result(action_id: str, request: ActionResultRequest, aut
     user_id, cluster_name = await client.validate_cluster_token(cluster_token)
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid cluster token")
-        
-    success = await client.update_action_result(action_id, request.status, request.output)
+
+    from app.insforge_client import _is_uuid
+    if not _is_uuid(action_id):
+        raise HTTPException(status_code=400, detail="Invalid action ID format")
+
+    success = await client.update_action_result(action_id, request.status, request.output, user_id=user_id)
     if not success:
         raise HTTPException(status_code=500, detail="Failed to update action result")
         
