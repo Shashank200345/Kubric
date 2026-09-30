@@ -239,9 +239,11 @@ class InsForgeClient:
                 logger.error(f"Failed to fetch action {action_id}: {e}")
                 return None
 
-    async def update_action_result(self, action_id: str, status: str, output: dict) -> bool:
-        """Update the status and output of an action."""
+    async def update_action_result(self, action_id: str, status: str, output: dict, user_id: str = None) -> bool:
+        """Update the status and output of an action, scoped to user_id when provided."""
         if not self.url or not _is_uuid(action_id):
+            return False
+        if user_id and not _is_uuid(user_id):
             return False
         async with httpx.AsyncClient() as client:
             try:
@@ -249,9 +251,12 @@ class InsForgeClient:
                     "status": status,
                     "output": output
                 }
-                # Update by ID regardless of previous status
+                query = f"id=eq.{action_id}"
+                if user_id:
+                    query += f"&user_id=eq.{user_id}"
+                # Update by ID (and user_id when provided) regardless of previous status
                 resp = await client.patch(
-                    f"{self.base_url}/actions?id=eq.{action_id}",
+                    f"{self.base_url}/actions?{query}",
                     headers=self.headers,
                     json=payload
                 )
