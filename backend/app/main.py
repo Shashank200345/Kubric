@@ -1013,7 +1013,7 @@ async def create_action(request: ActionCreateRequest, authorization: Optional[st
         )
         action_id = action.get("id")
         if action_id:
-            await client.update_action_result(action_id, exec_status, {"message": exec_output})
+            await client.update_action_result(action_id, exec_status, {"message": exec_output}, user_id=user_id)
 
         return {
             **action,
@@ -1060,8 +1060,12 @@ async def update_action_result(action_id: str, request: ActionResultRequest, aut
     user_id, cluster_name = await client.validate_cluster_token(cluster_token)
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid cluster token")
-        
-    success = await client.update_action_result(action_id, request.status, request.output)
+
+    from app.insforge_client import _is_uuid
+    if not _is_uuid(action_id):
+        raise HTTPException(status_code=400, detail="Invalid action ID format")
+
+    success = await client.update_action_result(action_id, request.status, request.output, user_id=user_id)
     if not success:
         raise HTTPException(status_code=500, detail="Failed to update action result")
         
