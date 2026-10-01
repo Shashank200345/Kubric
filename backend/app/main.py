@@ -1484,14 +1484,23 @@ class AskRequest(BaseModel):
 
 
 @app.post("/ask")
-async def ask_kubric(request: AskRequest):
+async def ask_kubric(request: AskRequest, authorization: Optional[str] = Header(None)):
     """
     Conversational endpoint. Gathers a quick cluster snapshot and asks the LLM
     to answer, grounded in real state. Supports an optional image (screenshot,
     kubectl output, dashboard panel) for multimodal root-cause analysis.
     """
     from app.ai.llm import OpenRouterClient
+    from app.insforge_client import _is_cluster_name
     import json as _json
+
+    user_id = _user_id_from_jwt(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    if request.cluster_context:
+        if request.cluster_context.startswith("-") or not _is_cluster_name(request.cluster_context):
+            raise HTTPException(status_code=400, detail="Invalid cluster context")
 
     snapshot_lines = []
     try:
