@@ -977,11 +977,12 @@ async def create_action(request: ActionCreateRequest, authorization: Optional[st
     client = InsForgeClient(user_jwt=f"Bearer {user_jwt}")
     
     try:
-        inv_details = await client.get_investigation_details(request.investigation_id)
+        user_id = _user_id_from_jwt(authorization)
+        inv_details = await client.get_investigation_details(request.investigation_id, user_id=user_id)
         if not inv_details:
             raise HTTPException(status_code=404, detail="Investigation not found")
 
-        user_id = inv_details.get("user_id") or _user_id_from_jwt(authorization)
+        user_id = inv_details.get("user_id") or user_id
 
         if not user_id:
             raise HTTPException(status_code=400, detail="Could not determine user_id for action")

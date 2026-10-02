@@ -94,14 +94,19 @@ class InsForgeClient:
                     detail = f" — {e.response.text}"
                 logger.error(f"Failed to insert progress step for {investigation_id}: {e}{detail}")
 
-    async def get_investigation_details(self, investigation_id: str) -> dict | None:
-        """Fetch the user_id and cluster_context from the investigations table for a given investigation."""
+    async def get_investigation_details(self, investigation_id: str, user_id: str = None) -> dict | None:
+        """Fetch the user_id and cluster_context from the investigations table for a given investigation, scoped to user_id when provided."""
         if not self.url or not _is_uuid(investigation_id):
             return None
+        if user_id and not _is_uuid(user_id):
+            return None
+        query = f"id=eq.{investigation_id}"
+        if user_id:
+            query += f"&user_id=eq.{user_id}"
         async with httpx.AsyncClient() as client:
             try:
                 resp = await client.get(
-                    f"{self.base_url}/investigations?id=eq.{investigation_id}&select=user_id,cluster_context",
+                    f"{self.base_url}/investigations?{query}&select=user_id,cluster_context",
                     headers=self.headers,
                 )
                 resp.raise_for_status()

@@ -53,6 +53,10 @@ async def test_insforge_client_uuid_validation(monkeypatch):
             details = await insforge.get_investigation_details(invalid_id)
             assert details is None
 
+            # get_investigation_details with invalid user_id
+            details_inv_user = await insforge.get_investigation_details(VALID_UUID, user_id=invalid_id)
+            assert details_inv_user is None
+
             # get_action
             action = await insforge.get_action(invalid_id, "user_123")
             assert action is None
@@ -136,6 +140,29 @@ def test_get_investigation_progress_invalid_uuid():
 
         # Verify InsForgeClient HTTP calls were not triggered for progress GET
         mock_instance.get.assert_not_called()
+
+@pytest.mark.asyncio
+async def test_get_investigation_details_user_id_scoping(monkeypatch):
+    monkeypatch.setenv("INSFORGE_URL", "https://mock.insforge.app")
+    monkeypatch.setenv("INSFORGE_API_KEY", "mock-key")
+
+    insforge = InsForgeClient()
+    investigation_id = VALID_UUID
+    user_id = "87654321-4321-8765-4321-876543218765"
+
+    with patch("httpx.AsyncClient.get") as mock_get:
+        mock_response = AsyncMock()
+        mock_response.raise_for_status = lambda: None
+        mock_response.json = lambda: [{"user_id": user_id, "cluster_context": "test-cluster"}]
+        mock_get.return_value = mock_response
+
+        # Scoped call
+        res = await insforge.get_investigation_details(investigation_id, user_id=user_id)
+        assert res == {"user_id": user_id, "cluster_context": "test-cluster"}
+        mock_get.assert_called_once()
+        args, kwargs = mock_get.call_args
+        assert f"investigations?id=eq.{investigation_id}&user_id=eq.{user_id}&select=user_id,cluster_context" in args[0]
+
 
 @pytest.mark.asyncio
 async def test_update_action_result_user_id_scoping(monkeypatch):
