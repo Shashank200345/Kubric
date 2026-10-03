@@ -56,3 +56,8 @@
 **Vulnerability:** `update_action_result` patched action database rows using `f"{self.base_url}/actions?id=eq.{action_id}"` with admin API key headers without scoping the query to the authenticated `user_id`, enabling an attacker with a valid cluster token to tamper with the execution status/output of another user's action ID (IDOR).
 **Learning:** Performing database update queries with admin credentials based solely on a record ID allows cross-tenant state manipulation unless explicitly scoped by the owner's `user_id`.
 **Prevention:** Always pass and filter by `user_id=eq.{user_id}` on admin PostgREST update queries to guarantee cross-tenant authorization checks.
+
+## 2026-10-12 - Enforce Authentication and Cluster Context Validation on Ask Endpoint
+**Vulnerability:** `ask_kubric` (`POST /ask`) allowed unauthenticated clients to invoke AI LLM queries and trigger cluster inspect calls without validating user JWTs or validating `cluster_context` parameter formatting.
+**Learning:** Endpoints that execute AI reasoning and cluster state inspection must enforce user authentication and parameter validation to prevent unauthorized LLM usage and context flag injection.
+**Prevention:** Verify `_user_id_from_jwt(authorization)` and validate `_is_cluster_name(cluster_context)` on all conversational and reasoning endpoints before executing backend operations.
