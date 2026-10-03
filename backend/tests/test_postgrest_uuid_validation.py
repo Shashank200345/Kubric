@@ -200,3 +200,33 @@ async def test_record_heartbeat_uuid_validation(monkeypatch):
 
         mock_patch.assert_not_called()
         mock_get.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_update_progress_invalid_user_id(monkeypatch):
+    monkeypatch.setenv("INSFORGE_URL", "https://mock.insforge.app")
+    monkeypatch.setenv("INSFORGE_API_KEY", "mock-key")
+
+    insforge = InsForgeClient()
+
+    with patch("httpx.AsyncClient.post") as mock_post, patch("httpx.AsyncClient.get") as mock_get:
+        mock_get_resp = AsyncMock()
+        mock_get_resp.status_code = 200
+        mock_get_resp.json = lambda: [{"user_id": "invalid_fetched_user_id"}]
+        mock_get.return_value = mock_get_resp
+
+        mock_post_resp = AsyncMock()
+        mock_post_resp.raise_for_status = lambda: None
+        mock_post.return_value = mock_post_resp
+
+        # Call update_progress with invalid user_id
+        for invalid_id in INVALID_UUIDS:
+            await insforge.update_progress(VALID_UUID, "Scanning Pods", user_id=invalid_id)
+
+            # Assert mock_post was called with payload NOT containing user_id
+            assert mock_post.called
+            args, kwargs = mock_post.call_args
+            payload = kwargs.get("json", {})
+            assert "user_id" not in payload
+            assert payload.get("session_id") == VALID_UUID
+            assert payload.get("step") == "Scanning Pods"
