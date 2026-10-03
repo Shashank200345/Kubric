@@ -67,6 +67,10 @@ class InsForgeClient:
                     "status": "running",
                 }
                 # Fetch fallback user_id if not provided
+                if user_id and not _is_uuid(user_id):
+                    logger.warning(f"Invalid user_id format provided to update_progress: {user_id}")
+                    user_id = None
+
                 if not user_id:
                     try:
                         usr_resp = await client.get(
@@ -74,11 +78,13 @@ class InsForgeClient:
                             headers=self.headers
                         )
                         if usr_resp.status_code == 200 and usr_resp.json():
-                            user_id = usr_resp.json()[0].get("user_id")
+                            fetched_uid = usr_resp.json()[0].get("user_id")
+                            if fetched_uid and _is_uuid(fetched_uid):
+                                user_id = fetched_uid
                     except Exception:
                         pass
                 
-                if user_id:
+                if user_id and _is_uuid(user_id):
                     payload["user_id"] = user_id
 
                 resp = await client.post(
