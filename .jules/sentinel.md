@@ -61,3 +61,8 @@
 **Vulnerability:** `ask_kubric` (`POST /ask`) allowed unauthenticated clients to invoke AI LLM queries and trigger cluster inspect calls without validating user JWTs or validating `cluster_context` parameter formatting.
 **Learning:** Endpoints that execute AI reasoning and cluster state inspection must enforce user authentication and parameter validation to prevent unauthorized LLM usage and context flag injection.
 **Prevention:** Verify `_user_id_from_jwt(authorization)` and validate `_is_cluster_name(cluster_context)` on all conversational and reasoning endpoints before executing backend operations.
+
+## 2026-10-18 - Enforce Authentication and Ownership Scope on Investigation Progress Endpoint
+**Vulnerability:** `get_investigation_progress` (`GET /investigate/{investigation_id}/progress`) queried the `investigation_progress` table using admin API headers without verifying user JWT authentication or validating user ownership of `investigation_id`, allowing unauthenticated access and cross-tenant information disclosure (IDOR).
+**Learning:** Endpoints that query backend records via admin-privileged API keys must verify JWT Bearer tokens and validate resource ownership before executing queries on behalf of users.
+**Prevention:** Verify `_user_id_from_jwt(authorization)` and validate `client.get_investigation_details(investigation_id, user_id=user_id)` before querying investigation progress rows.

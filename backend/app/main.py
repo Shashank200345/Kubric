@@ -417,16 +417,25 @@ def _parse_mem(val: str) -> float:
 
 @app.get("/investigate/{investigation_id}/progress")
 async def get_investigation_progress(investigation_id: str, authorization: Optional[str] = Header(None)):
-    """Fetches the progress steps for a specific investigation."""
+    """Fetches the progress steps for a specific investigation, scoped to the authenticated user."""
     from app.insforge_client import _is_uuid
     if not _is_uuid(investigation_id):
         return {"progress": []}
+
+    user_id = _user_id_from_jwt(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
 
     # We use the backend's admin client to bypass RLS since the frontend anon_key is blocked
     client = InsForgeClient()
     if not client.url:
         return {"progress": []}
-        
+
+    # Ensure the investigation belongs to the requesting user
+    inv_details = await client.get_investigation_details(investigation_id, user_id=user_id)
+    if not inv_details:
+        return {"progress": []}
+
     try:
         import httpx
         async with httpx.AsyncClient() as http:

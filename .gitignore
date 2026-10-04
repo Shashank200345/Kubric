@@ -5,6 +5,8 @@ frontend/.env.local
 node_modules/
 __pycache__/
 *.pyc
+venv/
+.venv/
 .insforge/
 
 # personal / media files (not part of the app)
