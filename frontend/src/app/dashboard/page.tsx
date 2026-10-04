@@ -243,7 +243,7 @@ export default function Dashboard() {
       // Populate the progress checklist for the persisted run (marks steps done).
       if (realId) {
         try {
-          const pRes = await fetch(`${API_BASE}/investigate/${realId}/progress`);
+          const pRes = await apiFetch(`/investigate/${realId}/progress`);
           if (pRes.ok) {
             const pData = await pRes.json();
             if (pData.progress) setProgressSteps(pData.progress as ProgressStep[]);
@@ -489,7 +489,7 @@ export default function Dashboard() {
     setCommandStatus('idle');
     setProgressSteps([]);
     try {
-      const res = await fetch(`${API_BASE}/investigate/${inv.id}/progress`);
+      const res = await apiFetch(`/investigate/${inv.id}/progress`);
       if (res.ok) {
         const data = await res.json();
         if (data.progress) setProgressSteps(data.progress as ProgressStep[]);

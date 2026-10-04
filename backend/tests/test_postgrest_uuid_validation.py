@@ -141,6 +141,59 @@ def test_get_investigation_progress_invalid_uuid():
         # Verify InsForgeClient HTTP calls were not triggered for progress GET
         mock_instance.get.assert_not_called()
 
+
+def test_get_investigation_progress_auth_and_scoping(monkeypatch):
+    from tests.test_jwt_verification import make_jwt, SECRET
+
+    monkeypatch.setenv("JWT_SECRET", SECRET)
+    user_a = "11111111-1111-1111-1111-111111111111"
+    token_a = make_jwt({"sub": user_a})
+
+    # 1. Unauthenticated request to valid UUID returns 401
+    response = client.get(f"/investigate/{VALID_UUID}/progress")
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Authentication required"}
+
+    # 2. Authenticated request scoped to user ownership
+    with patch("app.main.InsForgeClient") as MockInsForgeClient:
+        mock_client = AsyncMock()
+        MockInsForgeClient.return_value = mock_client
+
+        # User A does not own the investigation
+        mock_client.get_investigation_details.return_value = None
+        response = client.get(
+            f"/investigate/{VALID_UUID}/progress",
+            headers={"Authorization": f"Bearer {token_a}"},
+        )
+        assert response.status_code == 200
+        assert response.json() == {"progress": []}
+        mock_client.get_investigation_details.assert_called_once_with(VALID_UUID, user_id=user_a)
+
+    # 3. Authenticated owner gets progress
+    with patch("app.main.InsForgeClient") as MockInsForgeClient, \
+         patch("httpx.AsyncClient.get") as mock_http_get:
+        mock_client = AsyncMock()
+        MockInsForgeClient.return_value = mock_client
+        mock_client.get_investigation_details.return_value = {
+            "user_id": user_a,
+            "cluster_context": "test-cluster",
+        }
+        mock_client.base_url = "https://mock.insforge.app/api/database/records"
+        mock_client.headers = {"Authorization": "Bearer mock"}
+
+        mock_http_resp = AsyncMock()
+        mock_http_resp.raise_for_status = lambda: None
+        mock_http_resp.json = lambda: [{"step": "Checking Pods", "status": "running"}]
+        mock_http_get.return_value = mock_http_resp
+
+        response = client.get(
+            f"/investigate/{VALID_UUID}/progress",
+            headers={"Authorization": f"Bearer {token_a}"},
+        )
+        assert response.status_code == 200
+        assert response.json() == {"progress": [{"step": "Checking Pods", "status": "running"}]}
+        mock_client.get_investigation_details.assert_called_once_with(VALID_UUID, user_id=user_a)
+
 @pytest.mark.asyncio
 async def test_get_investigation_details_user_id_scoping(monkeypatch):
     monkeypatch.setenv("INSFORGE_URL", "https://mock.insforge.app")
