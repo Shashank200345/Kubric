@@ -283,3 +283,26 @@ async def test_update_progress_invalid_user_id(monkeypatch):
             assert "user_id" not in payload
             assert payload.get("session_id") == VALID_UUID
             assert payload.get("step") == "Scanning Pods"
+
+
+def test_get_action_status_uuid_validation(monkeypatch):
+    from tests.test_jwt_verification import make_jwt, SECRET
+
+    monkeypatch.setenv("JWT_SECRET", SECRET)
+    user_a = "11111111-1111-1111-1111-111111111111"
+    token_a = make_jwt({"sub": user_a})
+
+    with patch("app.main.InsForgeClient") as MockInsForgeClient:
+        mock_instance = AsyncMock()
+        MockInsForgeClient.return_value = mock_instance
+
+        for invalid_id in INVALID_UUIDS:
+            response = client.get(
+                f"/api/v1/actions/{invalid_id}",
+                headers={"Authorization": f"Bearer {token_a}"},
+            )
+            assert response.status_code == 400
+            assert response.json() == {"detail": "Invalid action ID format"}
+
+        # Verify InsForgeClient was not queried for invalid action IDs
+        mock_instance.get_action.assert_not_called()

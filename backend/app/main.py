@@ -1092,6 +1092,11 @@ async def get_action_status(action_id: str, authorization: Optional[str] = Heade
     user_id = _user_id_from_jwt(authorization)
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
+
+    from app.insforge_client import _is_uuid
+    if not _is_uuid(action_id):
+        raise HTTPException(status_code=400, detail="Invalid action ID format")
+
     client = InsForgeClient()
     action = await client.get_action(action_id, user_id)
     if not action:
