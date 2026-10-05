@@ -70,3 +70,8 @@
 **Vulnerability:** `get_investigation_progress` (`GET /investigate/{investigation_id}/progress`) queried the `investigation_progress` table using admin API headers without verifying user JWT authentication or validating user ownership of `investigation_id`, allowing unauthenticated access and cross-tenant information disclosure (IDOR).
 **Learning:** Endpoints that query backend records via admin-privileged API keys must verify JWT Bearer tokens and validate resource ownership before executing queries on behalf of users.
 **Prevention:** Verify `_user_id_from_jwt(authorization)` and validate `client.get_investigation_details(investigation_id, user_id=user_id)` before querying investigation progress rows.
+
+## 2026-10-24 - Validate action_id UUID Format in get_action_status Endpoint
+**Vulnerability:** `get_action_status` (`GET /api/v1/actions/{action_id}`) passed user-supplied `action_id` path parameters directly into `InsForgeClient.get_action` without validating UUID format, allowing unvalidated or filter-manipulating strings to be passed into PostgREST database query parameters.
+**Learning:** Route path parameters passed down to database query helper methods must be validated against expected data types (e.g. `_is_uuid`) at the API endpoint boundary to prevent malformed query formatting and unnecessary database calls.
+**Prevention:** Always validate path parameters against `_is_uuid(action_id)` and return an explicit `HTTP 400 Bad Request` exception before querying backend database clients.
