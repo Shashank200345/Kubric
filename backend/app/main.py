@@ -686,13 +686,21 @@ def _user_id_from_jwt(authorization: Optional[str]) -> Optional[str]:
 async def investigate_cluster(request: InvestigationRequest, authorization: Optional[str] = Header(None)):
     logger.info(f"Received request to investigate cluster (context: {request.cluster_context}).")
 
+    user_id = _user_id_from_jwt(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    if request.cluster_context:
+        from app.insforge_client import _is_cluster_name
+        if request.cluster_context.startswith("-") or not _is_cluster_name(request.cluster_context):
+            raise HTTPException(status_code=400, detail="Invalid cluster context")
+
     # Initialize the client with the user's JWT so it passes RLS checks
     client = InsForgeClient(user_jwt=authorization)
 
     # The frontend sends a short optimistic id (e.g. "inv_ab12cd"). The database
     # keys investigations/investigation_progress by a real UUID, so we must create
     # a persistent investigation row here and use its UUID for all DB writes.
-    user_id = _user_id_from_jwt(authorization)
     real_investigation_id = await client.create_investigation(
         cluster_context=request.cluster_context, user_id=user_id
     )
