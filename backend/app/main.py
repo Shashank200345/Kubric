@@ -702,7 +702,6 @@ async def investigate_cluster(request: InvestigationRequest, authorization: Opti
     # The frontend sends a short optimistic id (e.g. "inv_ab12cd"). The database
     # keys investigations/investigation_progress by a real UUID, so we must create
     # a persistent investigation row here and use its UUID for all DB writes.
-    user_id = _user_id_from_jwt(authorization)
     real_investigation_id = await client.create_investigation(
         cluster_context=request.cluster_context, user_id=user_id
     )

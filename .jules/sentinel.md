@@ -75,3 +75,8 @@
 **Vulnerability:** `get_action_status` (`GET /api/v1/actions/{action_id}`) passed user-supplied `action_id` path parameters directly into `InsForgeClient.get_action` without validating UUID format, allowing unvalidated or filter-manipulating strings to be passed into PostgREST database query parameters.
 **Learning:** Route path parameters passed down to database query helper methods must be validated against expected data types (e.g. `_is_uuid`) at the API endpoint boundary to prevent malformed query formatting and unnecessary database calls.
 **Prevention:** Always validate path parameters against `_is_uuid(action_id)` and return an explicit `HTTP 400 Bad Request` exception before querying backend database clients.
+
+## 2026-11-02 - Enforce Authentication and Cluster Context Validation on Investigate Endpoint
+**Vulnerability:** `investigate_cluster` (`POST /investigate`) allowed unauthenticated clients to trigger cluster troubleshooting investigations and AI LLM reasoning calls without validating user JWT authentication or validating `cluster_context` parameter formatting.
+**Learning:** Endpoints that execute AI reasoning and cluster state inspection must enforce user authentication and parameter validation at the endpoint boundary to prevent unauthorized resource consumption and context flag injection.
+**Prevention:** Always verify `_user_id_from_jwt(authorization)` and validate `_is_cluster_name(cluster_context)` on investigation and reasoning endpoints before executing backend operations.
