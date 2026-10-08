@@ -141,6 +141,11 @@ async def cli_connect_cluster(request: ClusterConnectRequest, authorization: Opt
     if not authorization:
         raise HTTPException(status_code=401, detail="Not authenticated")
     
+    # Validate cluster_name to prevent option injection or PostgREST query injection
+    from app.insforge_client import _is_cluster_name
+    if not _is_cluster_name(request.cluster_name):
+        raise HTTPException(status_code=400, detail="Invalid cluster name")
+
     # Generate a per-cluster agent token
     cluster_token = secrets.token_hex(32)
     
@@ -686,13 +691,9 @@ def _user_id_from_jwt(authorization: Optional[str]) -> Optional[str]:
 async def investigate_cluster(request: InvestigationRequest, authorization: Optional[str] = Header(None)):
     logger.info(f"Received request to investigate cluster (context: {request.cluster_context}).")
 
-    user_id = _user_id_from_jwt(authorization)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
     if request.cluster_context:
         from app.insforge_client import _is_cluster_name
-        if request.cluster_context.startswith("-") or not _is_cluster_name(request.cluster_context):
+        if not _is_cluster_name(request.cluster_context):
             raise HTTPException(status_code=400, detail="Invalid cluster context")
 
     # Initialize the client with the user's JWT so it passes RLS checks
