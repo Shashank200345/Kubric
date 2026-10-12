@@ -691,6 +691,10 @@ def _user_id_from_jwt(authorization: Optional[str]) -> Optional[str]:
 async def investigate_cluster(request: InvestigationRequest, authorization: Optional[str] = Header(None)):
     logger.info(f"Received request to investigate cluster (context: {request.cluster_context}).")
 
+    user_id = _user_id_from_jwt(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
     if request.cluster_context:
         from app.insforge_client import _is_cluster_name
         if not _is_cluster_name(request.cluster_context):
