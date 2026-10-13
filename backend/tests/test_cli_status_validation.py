@@ -35,8 +35,8 @@ def test_cli_connect_cluster_valid_name():
 def test_investigate_invalid_cluster_context(monkeypatch):
     from tests.test_jwt_verification import make_jwt, SECRET
     monkeypatch.setenv("JWT_SECRET", SECRET)
-    valid_token = make_jwt({"sub": "12345678-1234-5678-1234-567812345678"})
-    headers = {"Authorization": f"Bearer {valid_token}"}
+    token = make_jwt({"sub": "12345678-1234-5678-1234-567812345678"})
+    headers = {"Authorization": f"Bearer {token}"}
     response = client.post("/investigate", json={"investigation_id": "inv_123", "cluster_context": "--invalid-flag"}, headers=headers)
     assert response.status_code == 400
     assert response.json() == {"detail": "Invalid cluster context"}
