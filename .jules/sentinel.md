@@ -80,3 +80,8 @@
 **Vulnerability:** `investigate_cluster` (`POST /investigate`) allowed unauthenticated clients to trigger cluster troubleshooting investigations and AI LLM reasoning calls without validating user JWT authentication or validating `cluster_context` parameter formatting.
 **Learning:** Endpoints that execute AI reasoning and cluster state inspection must enforce user authentication and parameter validation at the endpoint boundary to prevent unauthorized resource consumption and context flag injection.
 **Prevention:** Always verify `_user_id_from_jwt(authorization)` and validate `_is_cluster_name(cluster_context)` on investigation and reasoning endpoints before executing backend operations.
+
+## 2026-11-10 - Enforce Cryptographic JWT Verification in create_action Endpoint
+**Vulnerability:** `create_action` (`POST /api/v1/actions`) accepted invalid or unauthenticated Bearer headers without validating JWT signatures via `_user_id_from_jwt`. When `user_id` was `None`, `get_investigation_details` queried the database using admin credentials without a `user_id` filter and populated `user_id` from the target investigation record, allowing unauthenticated action execution and IDOR bypass.
+**Learning:** Checking for header prefix presence (e.g. `authorization.startswith("Bearer ")`) without cryptographically verifying JWT signatures or checking `user_id` permits unauthenticated requests to fall back to admin-privileged queries and execute backend actions.
+**Prevention:** Enforce cryptographic signature verification (`_user_id_from_jwt`) at the start of mutation endpoints and immediately reject requests missing a valid `user_id` before querying backend database clients or executing cluster actions.

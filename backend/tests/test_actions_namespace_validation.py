@@ -1,17 +1,66 @@
 import pytest
-import base64
-import json
+import time
 from unittest.mock import patch, AsyncMock
 from fastapi.testclient import TestClient
 from app.main import app
+from tests.test_jwt_verification import make_jwt, SECRET
 
 client = TestClient(app)
 
-def create_mock_jwt(user_id="user_123"):
-    header = base64.urlsafe_b64encode(json.dumps({"alg": "HS256", "typ": "JWT"}).encode()).decode().rstrip("=")
-    payload = base64.urlsafe_b64encode(json.dumps({"sub": user_id}).encode()).decode().rstrip("=")
-    signature = "signature"
-    return f"{header}.{payload}.{signature}"
+VALID_UUID = "12345678-1234-5678-1234-567812345678"
+
+def create_mock_jwt(user_id=VALID_UUID):
+    payload = {"sub": user_id, "exp": int(time.time()) + 3600}
+    return make_jwt(payload, secret=SECRET)
+
+@pytest.fixture(autouse=True)
+def setup_jwt_secret(monkeypatch):
+    monkeypatch.setenv("JWT_SECRET", SECRET)
+
+def test_create_action_unauthenticated():
+    response = client.post(
+        "/api/v1/actions",
+        json={
+            "investigation_id": VALID_UUID,
+            "action_type": "restart_pod",
+            "params": {"namespace": "default", "pod_name": "test-pod"}
+        }
+    )
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Authentication required"
+
+def test_create_action_invalid_jwt():
+    forged_jwt = make_jwt({"sub": VALID_UUID, "exp": int(time.time()) + 3600}, secret="wrong-secret")
+    response = client.post(
+        "/api/v1/actions",
+        headers={"Authorization": f"Bearer {forged_jwt}"},
+        json={
+            "investigation_id": VALID_UUID,
+            "action_type": "restart_pod",
+            "params": {"namespace": "default", "pod_name": "test-pod"}
+        }
+    )
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Authentication required"
+
+def test_create_action_investigation_not_found():
+    jwt = create_mock_jwt()
+    with patch("app.main.InsForgeClient") as MockInsForgeClient:
+        mock_client_instance = AsyncMock()
+        mock_client_instance.get_investigation_details.return_value = None
+        MockInsForgeClient.return_value = mock_client_instance
+
+        response = client.post(
+            "/api/v1/actions",
+            headers={"Authorization": f"Bearer {jwt}"},
+            json={
+                "investigation_id": VALID_UUID,
+                "action_type": "restart_pod",
+                "params": {"namespace": "default", "pod_name": "test-pod"}
+            }
+        )
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Investigation not found"
 
 @pytest.mark.parametrize("namespace", ["kube-system", "kube-public", "kube-node-lease", "kubric-system"])
 def test_create_action_blocked_namespaces(namespace):
@@ -20,7 +69,7 @@ def test_create_action_blocked_namespaces(namespace):
         "/api/v1/actions",
         headers={"Authorization": f"Bearer {jwt}"},
         json={
-            "investigation_id": "inv_123",
+            "investigation_id": VALID_UUID,
             "action_type": "restart_pod",
             "params": {
                 "namespace": namespace,
@@ -36,7 +85,7 @@ def test_create_action_allowed_namespace():
     with patch("app.main.InsForgeClient") as MockInsForgeClient:
         mock_client_instance = AsyncMock()
         mock_client_instance.get_investigation_details.return_value = {
-            "user_id": "user_123",
+            "user_id": VALID_UUID,
             "cluster_context": "test-cluster"
         }
         mock_client_instance.create_action.return_value = {
