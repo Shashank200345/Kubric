@@ -970,8 +970,9 @@ class ActionCreateRequest(BaseModel):
 @app.post("/api/v1/actions")
 async def create_action(request: ActionCreateRequest, authorization: Optional[str] = Header(None)):
     """Frontend requests an action execution."""
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
+    user_id = _user_id_from_jwt(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
     
     # We validate the params depending on action_type
     try:
@@ -1000,15 +1001,9 @@ async def create_action(request: ActionCreateRequest, authorization: Optional[st
     client = InsForgeClient(user_jwt=f"Bearer {user_jwt}")
     
     try:
-        user_id = _user_id_from_jwt(authorization)
         inv_details = await client.get_investigation_details(request.investigation_id, user_id=user_id)
         if not inv_details:
             raise HTTPException(status_code=404, detail="Investigation not found")
-
-        user_id = inv_details.get("user_id") or user_id
-
-        if not user_id:
-            raise HTTPException(status_code=400, detail="Could not determine user_id for action")
 
         action = await client.create_action(
             request.investigation_id, 
@@ -1044,6 +1039,8 @@ async def create_action(request: ActionCreateRequest, authorization: Optional[st
             "execution_status": exec_status,
             "execution_output": exec_output,
         }
+    except HTTPException:
+        raise
     except Exception as e:
         import traceback
         traceback.print_exc()
