@@ -85,3 +85,8 @@
 **Vulnerability:** `create_action` (`POST /api/v1/actions`) accepted invalid or unauthenticated Bearer headers without validating JWT signatures via `_user_id_from_jwt`. When `user_id` was `None`, `get_investigation_details` queried the database using admin credentials without a `user_id` filter and populated `user_id` from the target investigation record, allowing unauthenticated action execution and IDOR bypass.
 **Learning:** Checking for header prefix presence (e.g. `authorization.startswith("Bearer ")`) without cryptographically verifying JWT signatures or checking `user_id` permits unauthenticated requests to fall back to admin-privileged queries and execute backend actions.
 **Prevention:** Enforce cryptographic signature verification (`_user_id_from_jwt`) at the start of mutation endpoints and immediately reject requests missing a valid `user_id` before querying backend database clients or executing cluster actions.
+
+## 2026-11-17 - Enforce User ID Ownership Scope in complete_investigation
+**Vulnerability:** `complete_investigation` in `InsForgeClient` patched investigation records using `f"{self.base_url}/investigations?id=eq.{investigation_id}"` with admin API key headers without scoping the query to the authenticated `user_id`, enabling cross-tenant investigation status/diagnosis overwrite if an attacker knew or guessed another user's investigation ID (IDOR).
+**Learning:** Admin-privileged PATCH queries against PostgREST tables based solely on a record ID allow cross-tenant record tampering unless explicitly filtered by `user_id`.
+**Prevention:** Pass and validate `user_id` via `_is_uuid`, appending `&user_id=eq.{user_id}` on admin PostgREST PATCH queries.

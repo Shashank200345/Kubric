@@ -743,7 +743,7 @@ async def investigate_cluster(request: InvestigationRequest, authorization: Opti
 
         # 3. Save Final Diagnosis
         if active_id:
-            await client.complete_investigation(active_id, diagnosis)
+            await client.complete_investigation(active_id, diagnosis, user_id=user_id)
 
         return {
             "status": "success",
@@ -760,7 +760,7 @@ async def investigate_cluster(request: InvestigationRequest, authorization: Opti
                 "kubectl_command": None,
                 "confidence": 0
             }
-            await client.complete_investigation(active_id, failure_diagnosis)
+            await client.complete_investigation(active_id, failure_diagnosis, user_id=user_id)
 
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
