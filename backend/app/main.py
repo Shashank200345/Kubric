@@ -260,6 +260,11 @@ async def get_cluster_metrics(context: Optional[str] = None, authorization: Opti
     Requires metrics-server to be installed in the cluster.
     Falls back to node capacity-based estimates if top commands fail.
     """
+    if context:
+        from app.insforge_client import _is_cluster_name
+        if not _is_cluster_name(context):
+            raise HTTPException(status_code=400, detail="Invalid cluster context")
+
     metrics = {
         "cpu_pct": 0,
         "memory_pct": 0,
@@ -1245,6 +1250,11 @@ async def get_metrics_history():
 @app.get("/workloads")
 async def get_workloads(context: Optional[str] = None, authorization: Optional[str] = Header(None)):
     """Returns real deployments in the cluster with pod/resource status."""
+    if context:
+        from app.insforge_client import _is_cluster_name
+        if not _is_cluster_name(context):
+            raise HTTPException(status_code=400, detail="Invalid cluster context")
+
     if _use_agent_source():
         served = await _served_state("workloads", context, _require_user_in_agent_mode(authorization))
         return {"workloads": served or []}
@@ -1353,6 +1363,11 @@ async def get_workloads(context: Optional[str] = None, authorization: Optional[s
 @app.get("/pods")
 async def get_pods(context: Optional[str] = None, authorization: Optional[str] = Header(None)):
     """Returns a list of all pods with their status and metrics."""
+    if context:
+        from app.insforge_client import _is_cluster_name
+        if not _is_cluster_name(context):
+            raise HTTPException(status_code=400, detail="Invalid cluster context")
+
     if _use_agent_source():
         served = await _served_state("pods", context, _require_user_in_agent_mode(authorization))
         return {"pods": served or []}
@@ -1412,6 +1427,11 @@ async def get_pods(context: Optional[str] = None, authorization: Optional[str] =
 @app.get("/nodes")
 async def get_nodes(context: Optional[str] = None, authorization: Optional[str] = Header(None)):
     """Returns real node-level status and resource usage."""
+    if context:
+        from app.insforge_client import _is_cluster_name
+        if not _is_cluster_name(context):
+            raise HTTPException(status_code=400, detail="Invalid cluster context")
+
     if _use_agent_source():
         served = await _served_state("nodes", context, _require_user_in_agent_mode(authorization))
         return {"nodes": served or []}
@@ -1467,6 +1487,11 @@ async def get_nodes(context: Optional[str] = None, authorization: Optional[str] 
 @app.get("/events")
 async def get_events(context: Optional[str] = None, limit: int = 30, authorization: Optional[str] = Header(None)):
     """Returns recent real Kubernetes events across all namespaces."""
+    if context:
+        from app.insforge_client import _is_cluster_name
+        if not _is_cluster_name(context):
+            raise HTTPException(status_code=400, detail="Invalid cluster context")
+
     if _use_agent_source():
         served = await _served_state("events", context, _require_user_in_agent_mode(authorization))
         return {"events": (served or [])[:limit]}
