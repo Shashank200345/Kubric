@@ -123,14 +123,22 @@ class InsForgeClient:
                 logger.error(f"Failed to fetch details for {investigation_id}: {e}")
         return None
 
-    async def complete_investigation(self, investigation_id: str, diagnosis: dict):
-        """Mark investigation as complete and save the diagnosis."""
+    async def complete_investigation(self, investigation_id: str, diagnosis: dict, user_id: str = None):
+        """Mark investigation as complete and save the diagnosis, scoped to user_id when provided."""
         if not self.url:
             return
 
         if not _is_uuid(investigation_id):
             logger.debug(f"Skipping completion — '{investigation_id}' is not a persisted investigation id.")
             return
+
+        if user_id and not _is_uuid(user_id):
+            logger.warning(f"Invalid user_id format provided to complete_investigation: {user_id}")
+            return
+
+        query = f"id=eq.{investigation_id}"
+        if user_id:
+            query += f"&user_id=eq.{user_id}"
 
         async with httpx.AsyncClient() as client:
             try:
@@ -146,7 +154,7 @@ class InsForgeClient:
                 }
                 
                 patch_resp = await client.patch(
-                    f"{self.base_url}/investigations?id=eq.{investigation_id}",
+                    f"{self.base_url}/investigations?{query}",
                     headers=self.headers,
                     json=payload
                 )

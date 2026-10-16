@@ -73,6 +73,9 @@ async def test_insforge_client_uuid_validation(monkeypatch):
             updated_inv_user = await insforge.update_action_result(VALID_UUID, "success", {"msg": "done"}, user_id=invalid_id)
             assert updated_inv_user is False
 
+            # complete_investigation with invalid user_id
+            await insforge.complete_investigation(VALID_UUID, {"root_cause": "test"}, user_id=invalid_id)
+
             # validate_cluster_token
             user_id, cluster_name = await insforge.validate_cluster_token(invalid_id)
             assert user_id is None
@@ -215,6 +218,27 @@ async def test_get_investigation_details_user_id_scoping(monkeypatch):
         mock_get.assert_called_once()
         args, kwargs = mock_get.call_args
         assert f"investigations?id=eq.{investigation_id}&user_id=eq.{user_id}&select=user_id,cluster_context" in args[0]
+
+
+@pytest.mark.asyncio
+async def test_complete_investigation_user_id_scoping(monkeypatch):
+    monkeypatch.setenv("INSFORGE_URL", "https://mock.insforge.app")
+    monkeypatch.setenv("INSFORGE_API_KEY", "mock-key")
+
+    insforge = InsForgeClient()
+    investigation_id = VALID_UUID
+    user_id = "87654321-4321-8765-4321-876543218765"
+
+    with patch("httpx.AsyncClient.patch") as mock_patch:
+        mock_response = AsyncMock()
+        mock_response.raise_for_status = lambda: None
+        mock_patch.return_value = mock_response
+
+        # Scoped call
+        await insforge.complete_investigation(investigation_id, {"root_cause": "OOMKilled"}, user_id=user_id)
+        mock_patch.assert_called_once()
+        args, kwargs = mock_patch.call_args
+        assert f"investigations?id=eq.{investigation_id}&user_id=eq.{user_id}" in args[0]
 
 
 @pytest.mark.asyncio
