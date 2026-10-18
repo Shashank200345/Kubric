@@ -280,6 +280,39 @@ async def test_record_heartbeat_uuid_validation(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_update_progress_user_id_scoping_on_lookup(monkeypatch):
+    monkeypatch.setenv("INSFORGE_URL", "https://mock.insforge.app")
+    monkeypatch.setenv("INSFORGE_API_KEY", "mock-key")
+
+    insforge = InsForgeClient()
+    investigation_id = VALID_UUID
+    user_id = "87654321-4321-8765-4321-876543218765"
+
+    with patch("httpx.AsyncClient.get") as mock_get, patch("httpx.AsyncClient.post") as mock_post:
+        mock_get_resp = AsyncMock()
+        mock_get_resp.raise_for_status = lambda: None
+        mock_get_resp.json = lambda: [{"user_id": user_id, "cluster_context": "test-cluster"}]
+        mock_get.return_value = mock_get_resp
+
+        mock_post_resp = AsyncMock()
+        mock_post_resp.raise_for_status = lambda: None
+        mock_post.return_value = mock_post_resp
+
+        await insforge.update_progress(investigation_id, "Scanning Pods", user_id=None)
+
+        # Verify get query was filtered by id=eq.investigation_id
+        mock_get.assert_called_once()
+        args, kwargs = mock_get.call_args
+        assert f"investigations?id=eq.{investigation_id}" in args[0]
+        assert "limit=1&user_id=not.is.null" not in args[0]
+
+        # Verify post payload includes the fetched user_id for this investigation
+        mock_post.assert_called_once()
+        _, post_kwargs = mock_post.call_args
+        assert post_kwargs.get("json", {}).get("user_id") == user_id
+
+
+@pytest.mark.asyncio
 async def test_update_progress_invalid_user_id(monkeypatch):
     monkeypatch.setenv("INSFORGE_URL", "https://mock.insforge.app")
     monkeypatch.setenv("INSFORGE_API_KEY", "mock-key")

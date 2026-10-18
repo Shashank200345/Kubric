@@ -72,17 +72,9 @@ class InsForgeClient:
                     user_id = None
 
                 if not user_id:
-                    try:
-                        usr_resp = await client.get(
-                            f"{self.base_url}/investigations?select=user_id&limit=1&user_id=not.is.null",
-                            headers=self.headers
-                        )
-                        if usr_resp.status_code == 200 and usr_resp.json():
-                            fetched_uid = usr_resp.json()[0].get("user_id")
-                            if fetched_uid and _is_uuid(fetched_uid):
-                                user_id = fetched_uid
-                    except Exception:
-                        pass
+                    details = await self.get_investigation_details(investigation_id)
+                    if details and details.get("user_id") and _is_uuid(details["user_id"]):
+                        user_id = details["user_id"]
                 
                 if user_id and _is_uuid(user_id):
                     payload["user_id"] = user_id
