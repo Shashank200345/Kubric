@@ -90,3 +90,8 @@
 **Vulnerability:** `complete_investigation` in `InsForgeClient` patched investigation records using `f"{self.base_url}/investigations?id=eq.{investigation_id}"` with admin API key headers without scoping the query to the authenticated `user_id`, enabling cross-tenant investigation status/diagnosis overwrite if an attacker knew or guessed another user's investigation ID (IDOR).
 **Learning:** Admin-privileged PATCH queries against PostgREST tables based solely on a record ID allow cross-tenant record tampering unless explicitly filtered by `user_id`.
 **Prevention:** Pass and validate `user_id` via `_is_uuid`, appending `&user_id=eq.{user_id}` on admin PostgREST PATCH queries.
+
+## 2026-11-20 - Enforce RFC 1123 Resource Name Validation in Action Builder and Authentication on Metrics History
+**Vulnerability:** `_build_action_argv` relied on `startswith("-")` checks without enforcing strict RFC 1123 DNS subdomain regex validation on `namespace`, `pod_name`, `deployment_name`, and `container_name`, permitting malformed resource names to be passed to CLI command construction. Additionally, `GET /metrics/history` allowed unauthenticated access to system metrics history when operating in agent mode.
+**Learning:** Checking leading dashes alone (`startswith("-")`) is insufficient for resource parameters passed to CLI builders, and dashboard history endpoints must enforce user authentication in agent mode.
+**Prevention:** Always validate Kubernetes resource parameters against `_K8S_RESOURCE_PATTERN` regex and ensure all dashboard data endpoints invoke `_require_user_in_agent_mode`.
