@@ -468,8 +468,9 @@ def _build_action_argv(action_type: str, params: Dict[str, Any], context: Option
     """
     import re
     from app.insforge_client import _is_cluster_name
+    resource_regex = re.compile(r"^[a-zA-Z0-9]([-a-zA-Z0-9.]*[a-zA-Z0-9])?$")
     ns = str(params.get("namespace") or "default")
-    if ns.startswith("-") or (context and (context.startswith("-") or not _is_cluster_name(context))):
+    if ns.startswith("-") or not resource_regex.match(ns) or (context and (context.startswith("-") or not _is_cluster_name(context))):
         return None
     base = ["kubectl"]
     if context:
@@ -478,13 +479,13 @@ def _build_action_argv(action_type: str, params: Dict[str, Any], context: Option
 
     if action_type == "restart_pod":
         pod = str(params.get("pod_name") or "")
-        if not pod or pod.startswith("-"):
+        if not pod or pod.startswith("-") or not resource_regex.match(pod):
             return None
         return base + ["delete", "pod", pod]
 
     if action_type == "rollback_deployment":
         dep = str(params.get("deployment_name") or "")
-        if not dep or dep.startswith("-"):
+        if not dep or dep.startswith("-") or not resource_regex.match(dep):
             return None
         argv = base + ["rollout", "undo", f"deployment/{dep}"]
         rev = params.get("target_revision")
@@ -511,14 +512,14 @@ def _build_action_argv(action_type: str, params: Dict[str, Any], context: Option
             if cpu_str.startswith("-") or not re.match(res_pattern, cpu_str):
                 return None
             limits.append(f"cpu={cpu_str}")
-        if not dep or dep.startswith("-") or not container or container.startswith("-") or not limits:
+        if not dep or dep.startswith("-") or not resource_regex.match(dep) or not container or container.startswith("-") or not resource_regex.match(container) or not limits:
             return None
         return base + ["set", "resources", f"deployment/{dep}", f"-c={container}", f"--limits={','.join(limits)}"]
 
     if action_type == "scale_deployment":
         dep = str(params.get("deployment_name") or "")
         replicas = params.get("replicas")
-        if not dep or dep.startswith("-") or replicas is None or not isinstance(replicas, int) or replicas < 0 or replicas > 50:
+        if not dep or dep.startswith("-") or not resource_regex.match(dep) or replicas is None or not isinstance(replicas, int) or replicas < 0 or replicas > 50:
             return None
         return base + ["scale", f"deployment/{dep}", f"--replicas={replicas}"]
 
@@ -527,11 +528,11 @@ def _build_action_argv(action_type: str, params: Dict[str, Any], context: Option
         container = str(params.get("container_name") or "")
         env_name = str(params.get("env_name") or "")
         env_value = str(params.get("env_value") or "")
-        if not dep or dep.startswith("-") or not env_name or not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", env_name):
+        if not dep or dep.startswith("-") or not resource_regex.match(dep) or not env_name or not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", env_name):
             return None
         argv = base + ["set", "env", f"deployment/{dep}"]
         if container:
-            if container.startswith("-"):
+            if container.startswith("-") or not resource_regex.match(container):
                 return None
             argv.append(f"-c={container}")
         argv.append(f"{env_name}={env_value}")
@@ -1232,11 +1233,13 @@ async def start_metrics_collector():
 
 
 @app.get("/metrics/history")
-async def get_metrics_history():
+async def get_metrics_history(authorization: Optional[str] = Header(None)):
     """
     Returns the last 30 metrics samples (collected every ~10s).
     Each sample: { ts, cpu_pct, memory_pct, pod_count }
     """
+    if _use_agent_source():
+        _require_user_in_agent_mode(authorization)
     return {"samples": _metrics_history}
 
 
