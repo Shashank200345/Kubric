@@ -90,3 +90,8 @@
 **Vulnerability:** `complete_investigation` in `InsForgeClient` patched investigation records using `f"{self.base_url}/investigations?id=eq.{investigation_id}"` with admin API key headers without scoping the query to the authenticated `user_id`, enabling cross-tenant investigation status/diagnosis overwrite if an attacker knew or guessed another user's investigation ID (IDOR).
 **Learning:** Admin-privileged PATCH queries against PostgREST tables based solely on a record ID allow cross-tenant record tampering unless explicitly filtered by `user_id`.
 **Prevention:** Pass and validate `user_id` via `_is_uuid`, appending `&user_id=eq.{user_id}` on admin PostgREST PATCH queries.
+
+## 2026-11-24 - Enforce User Scoping in Background Reasoning and Validate State Push Context
+**Vulnerability:** `process_incident_background` executed AI reasoning background tasks and updated investigation progress/completion records without passing `user_id`, omitting tenant scoping during background database writes. Additionally, `push_cluster_state` (`POST /api/v1/state`) allowed unvalidated `cluster_context` strings.
+**Learning:** Asynchronous background tasks spawned by HTTP ingestion endpoints must inherit and pass down the authenticated `user_id` to maintain multi-tenant isolation during backend database writes.
+**Prevention:** Always propagate `user_id` into background worker tasks and enforce `_is_cluster_name` validation on request context parameters at the API endpoint boundary.
