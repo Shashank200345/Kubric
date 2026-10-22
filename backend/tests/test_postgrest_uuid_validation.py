@@ -308,6 +308,44 @@ async def test_update_progress_invalid_user_id(monkeypatch):
             assert payload.get("session_id") == VALID_UUID
             assert payload.get("step") == "Scanning Pods"
 
+            # Assert fallback get query is scoped to investigation_id
+            get_args, _ = mock_get.call_args
+            assert f"investigations?id=eq.{VALID_UUID}&select=user_id" in get_args[0]
+
+
+@pytest.mark.asyncio
+async def test_update_progress_fallback_user_id_scoping(monkeypatch):
+    monkeypatch.setenv("INSFORGE_URL", "https://mock.insforge.app")
+    monkeypatch.setenv("INSFORGE_API_KEY", "mock-key")
+
+    insforge = InsForgeClient()
+    user_id = "87654321-4321-8765-4321-876543218765"
+
+    with patch("httpx.AsyncClient.post") as mock_post, patch("httpx.AsyncClient.get") as mock_get:
+        mock_get_resp = AsyncMock()
+        mock_get_resp.status_code = 200
+        mock_get_resp.json = lambda: [{"user_id": user_id}]
+        mock_get.return_value = mock_get_resp
+
+        mock_post_resp = AsyncMock()
+        mock_post_resp.raise_for_status = lambda: None
+        mock_post.return_value = mock_post_resp
+
+        # Call update_progress without user_id to trigger fallback lookup
+        await insforge.update_progress(VALID_UUID, "Checking Pods")
+
+        # Verify fallback GET query was scoped to the investigation_id
+        mock_get.assert_called_once()
+        get_args, _ = mock_get.call_args
+        assert f"investigations?id=eq.{VALID_UUID}&select=user_id" in get_args[0]
+
+        # Verify POST payload contained fetched user_id
+        mock_post.assert_called_once()
+        _, post_kwargs = mock_post.call_args
+        payload = post_kwargs.get("json", {})
+        assert payload.get("user_id") == user_id
+        assert payload.get("session_id") == VALID_UUID
+
 
 def test_get_action_status_uuid_validation(monkeypatch):
     from tests.test_jwt_verification import make_jwt, SECRET
