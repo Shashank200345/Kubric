@@ -74,7 +74,7 @@ class InsForgeClient:
                 if not user_id:
                     try:
                         usr_resp = await client.get(
-                            f"{self.base_url}/investigations?select=user_id&limit=1&user_id=not.is.null",
+                            f"{self.base_url}/investigations?id=eq.{investigation_id}&select=user_id",
                             headers=self.headers
                         )
                         if usr_resp.status_code == 200 and usr_resp.json():

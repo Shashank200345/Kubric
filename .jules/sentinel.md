@@ -90,3 +90,8 @@
 **Vulnerability:** `complete_investigation` in `InsForgeClient` patched investigation records using `f"{self.base_url}/investigations?id=eq.{investigation_id}"` with admin API key headers without scoping the query to the authenticated `user_id`, enabling cross-tenant investigation status/diagnosis overwrite if an attacker knew or guessed another user's investigation ID (IDOR).
 **Learning:** Admin-privileged PATCH queries against PostgREST tables based solely on a record ID allow cross-tenant record tampering unless explicitly filtered by `user_id`.
 **Prevention:** Pass and validate `user_id` via `_is_uuid`, appending `&user_id=eq.{user_id}` on admin PostgREST PATCH queries.
+
+## 2026-11-24 - Scope Fallback user_id Lookup in update_progress to Investigation ID
+**Vulnerability:** `update_progress` in `InsForgeClient` fetched a fallback `user_id` when not provided by querying `f"{self.base_url}/investigations?select=user_id&limit=1&user_id=not.is.null"` without filtering by `id=eq.{investigation_id}`. In a multi-tenant environment, this assigned an arbitrary user's ID to progress steps, corrupting ownership attribution.
+**Learning:** Admin-privileged fallback queries that retrieve parent record fields must filter by the parent record's primary key rather than taking an unscoped limit=1 result.
+**Prevention:** Always scope parent lookup queries in helper methods with `id=eq.{investigation_id}` when retrieving owner attributes.

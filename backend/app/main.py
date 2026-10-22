@@ -772,14 +772,14 @@ async def investigate_cluster(request: InvestigationRequest, authorization: Opti
         logger.error(f"Unexpected investigation error: {e}")
         raise HTTPException(status_code=500, detail="An internal error occurred during the investigation.")
 
-async def process_incident_background(investigation_id: str, evidence: dict):
+async def process_incident_background(investigation_id: str, evidence: dict, user_id: str = None):
     """Background task to run AI reasoning without blocking the ingest HTTP response."""
     client = InsForgeClient()
     try:
-        await client.update_progress(investigation_id, "AI Reasoning")
+        await client.update_progress(investigation_id, "AI Reasoning", user_id=user_id)
         ai_agent = KubernetesAIAgent()
         diagnosis = await ai_agent.analyze(evidence)
-        await client.complete_investigation(investigation_id, diagnosis)
+        await client.complete_investigation(investigation_id, diagnosis, user_id=user_id)
     except Exception as e:
         logger.error(f"Background AI processing failed: {e}")
         failure_diagnosis = {
@@ -789,7 +789,7 @@ async def process_incident_background(investigation_id: str, evidence: dict):
             "kubectl_command": None,
             "confidence": 0
         }
-        await client.complete_investigation(investigation_id, failure_diagnosis)
+        await client.complete_investigation(investigation_id, failure_diagnosis, user_id=user_id)
 
 async def _record_heartbeat(cluster_token: str, user_id: str):
     """Update clusters.last_heartbeat_at and mark onboarding connection as verified if needed."""
@@ -923,7 +923,7 @@ async def ingest_incident(request: AgentIngestRequest, background_tasks: Backgro
             raise HTTPException(status_code=500, detail="Database error")
             
         # 3. Queue AI Reasoning in background
-        background_tasks.add_task(process_incident_background, investigation_id, request.evidence)
+        background_tasks.add_task(process_incident_background, investigation_id, request.evidence, user_id)
         
         # 4. Immediately return 200 OK so the agent is not blocked
         return {"status": "success", "investigation_id": investigation_id, "message": "Incident queued for AI analysis"}
