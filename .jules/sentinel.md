@@ -95,3 +95,8 @@
 **Vulnerability:** `update_progress` in `InsForgeClient` fetched a fallback `user_id` when not provided by querying `f"{self.base_url}/investigations?select=user_id&limit=1&user_id=not.is.null"` without filtering by `id=eq.{investigation_id}`. In a multi-tenant environment, this assigned an arbitrary user's ID to progress steps, corrupting ownership attribution.
 **Learning:** Admin-privileged fallback queries that retrieve parent record fields must filter by the parent record's primary key rather than taking an unscoped limit=1 result.
 **Prevention:** Always scope parent lookup queries in helper methods with `id=eq.{investigation_id}` when retrieving owner attributes.
+
+## 2026-12-01 - Enforce Authentication Verification on Clusters Endpoint Across All Modes
+**Vulnerability:** `get_clusters` (`GET /clusters`) in `backend/app/main.py` only checked user authentication when running in agent mode (`_use_agent_source() == True`), allowing unauthenticated clients to list cluster names in default local mode.
+**Learning:** Dual-mode endpoints that switch data sources (local vs agent) must enforce user authentication upfront at the API handler entry point rather than delegating auth checks inside mode-specific helper functions.
+**Prevention:** Always verify `_user_id_from_jwt(authorization)` at the start of endpoint functions before checking data source modes or executing underlying operations.

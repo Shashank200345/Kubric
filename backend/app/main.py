@@ -239,10 +239,13 @@ class AgentIngestRequest(BaseModel):
 
 @app.get("/clusters")
 async def get_clusters(authorization: Optional[str] = Header(None)):
+    user_id = _user_id_from_jwt(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
     if _use_agent_source():
         # Push mode: list clusters that have reported state, scoped to the user.
-        uid = _require_user_in_agent_mode(authorization)
-        clusters = await InsForgeClient().list_state_clusters(uid)
+        clusters = await InsForgeClient().list_state_clusters(user_id)
         return {"clusters": clusters}
     try:
         output = KubectlExecutor.run("kubectl config get-contexts -o name", parse_json=False)
