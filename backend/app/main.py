@@ -138,7 +138,8 @@ async def cli_poll_device_token(request: DeviceTokenRequest):
 @app.post("/v1/clusters/connect")
 async def cli_connect_cluster(request: ClusterConnectRequest, authorization: Optional[str] = Header(None)):
     """Register a cluster and return the Helm values for installing the Kubric agent."""
-    if not authorization:
+    user_id = _user_id_from_jwt(authorization)
+    if not user_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
     
     # Validate cluster_name to prevent option injection or PostgREST query injection
@@ -162,7 +163,8 @@ async def cli_connect_cluster(request: ClusterConnectRequest, authorization: Opt
 @app.get("/v1/status")
 async def cli_get_status(cluster: str = "", authorization: Optional[str] = Header(None)):
     """Return a status snapshot for the CLI's `kubric status` command."""
-    if not authorization:
+    user_id = _user_id_from_jwt(authorization)
+    if not user_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     if cluster:
