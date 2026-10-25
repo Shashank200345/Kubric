@@ -95,3 +95,8 @@
 **Vulnerability:** `update_progress` in `InsForgeClient` fetched a fallback `user_id` when not provided by querying `f"{self.base_url}/investigations?select=user_id&limit=1&user_id=not.is.null"` without filtering by `id=eq.{investigation_id}`. In a multi-tenant environment, this assigned an arbitrary user's ID to progress steps, corrupting ownership attribution.
 **Learning:** Admin-privileged fallback queries that retrieve parent record fields must filter by the parent record's primary key rather than taking an unscoped limit=1 result.
 **Prevention:** Always scope parent lookup queries in helper methods with `id=eq.{investigation_id}` when retrieving owner attributes.
+
+## 2026-11-28 - Validate Action IDs and Scope Pending Action/Heartbeat PATCH Queries by User ID
+**Vulnerability:** `get_pending_actions` in `InsForgeClient` formatted raw `action['id']` strings into PostgREST `in.()` filters and executed status update PATCH requests using admin credentials without scoping by `user_id`. Similarly, `_record_heartbeat` updated `clusters.last_heartbeat_at` without `user_id` query scoping.
+**Learning:** Performing bulk or record updates with admin service-role credentials without filtering by `user_id` permits cross-tenant database row modifications and filter formatting errors if IDs are unvalidated.
+**Prevention:** Validate all action IDs against `_is_uuid` and append `&user_id=eq.{user_id}` to all PostgREST PATCH queries executed with admin-privileged headers.
