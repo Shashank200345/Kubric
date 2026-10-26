@@ -100,3 +100,7 @@
 **Vulnerability:** `get_pending_actions` in `InsForgeClient` formatted raw `action['id']` strings into PostgREST `in.()` filters and executed status update PATCH requests using admin credentials without scoping by `user_id`. Similarly, `_record_heartbeat` updated `clusters.last_heartbeat_at` without `user_id` query scoping.
 **Learning:** Performing bulk or record updates with admin service-role credentials without filtering by `user_id` permits cross-tenant database row modifications and filter formatting errors if IDs are unvalidated.
 **Prevention:** Validate all action IDs against `_is_uuid` and append `&user_id=eq.{user_id}` to all PostgREST PATCH queries executed with admin-privileged headers.
+## 2026-11-28 - Validate Onboarding Step Payload Inputs Before PostgREST Persistence
+**Vulnerability:** `PATCH /api/v1/onboarding/step` accepted arbitrary `data` dictionary fields (such as `cluster_name` and `connection_method`) without validating data types or formatting patterns against domain rules prior to saving them in `user_onboarding` via admin PostgREST REST calls.
+**Learning:** Endpoint handlers that extract unvalidated values from request payloads and persist them via admin-privileged database clients expose downstream endpoints to filter injection and state corruption.
+**Prevention:** Validate step payload values against domain-specific regexes (`_CLUSTER_NAME_PATTERN`) and explicit enum value tuples before formatting PostgREST database patch payloads.
