@@ -235,11 +235,18 @@ async def update_onboarding_step(
         if request.step == ONBOARDING_STEPS[-1]:
             patch_payload["is_complete"] = True
 
-        # Persist step-specific data from request.data
+        # Persist step-specific data from request.data with strict input validation
         if request.step == "cluster_name" and "cluster_name" in request.data:
-            patch_payload["cluster_name"] = request.data["cluster_name"]
+            c_name = request.data["cluster_name"]
+            if c_name is not None:
+                if not isinstance(c_name, str) or not _CLUSTER_NAME_PATTERN.match(c_name):
+                    raise HTTPException(status_code=400, detail="Invalid cluster name format")
+            patch_payload["cluster_name"] = c_name
         elif request.step == "connection_method" and "connection_method" in request.data:
-            patch_payload["connection_method"] = request.data["connection_method"]
+            c_method = request.data["connection_method"]
+            if c_method is not None and c_method not in ("web_token", "cli"):
+                raise HTTPException(status_code=400, detail="Invalid connection method")
+            patch_payload["connection_method"] = c_method
         elif request.step == "trust_mode" and "trust_mode" in request.data:
             patch_payload["trust_mode"] = request.data["trust_mode"]
         elif request.step == "team_invite" and "invited_emails" in request.data:

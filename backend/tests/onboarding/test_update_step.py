@@ -309,3 +309,59 @@ class TestUpdateOnboardingStep:
         patch_call = mock_instance.patch.call_args
         patch_json = patch_call.kwargs.get("json") or patch_call[1].get("json")
         assert patch_json["invited_emails"] == ["a@b.com", "c@d.com"]
+
+    @patch("app.api.onboarding.httpx.AsyncClient")
+    def test_invalid_cluster_name_returns_400(self, mock_client_cls):
+        """Invalid cluster_name format returns 400 Bad Request."""
+        existing_record = {
+            "user_id": "user-123",
+            "current_step": "cluster_name",
+            "completed_steps": ["welcome"],
+            "step_timestamps": {},
+            "cluster_name": None,
+            "connection_method": None,
+            "trust_mode": "approve",
+            "invited_emails": [],
+            "is_complete": False,
+        }
+
+        mock_instance = AsyncMock()
+        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_instance)
+        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+        mock_instance.get = AsyncMock(return_value=_mock_response(200, [existing_record]))
+
+        resp = client.patch(
+            "/api/v1/onboarding/step",
+            json={"step": "cluster_name", "data": {"cluster_name": "cluster,user_id=neq.0"}},
+            headers=AUTH_HEADER,
+        )
+        assert resp.status_code == 400
+        assert "Invalid cluster name" in resp.json()["detail"]
+
+    @patch("app.api.onboarding.httpx.AsyncClient")
+    def test_invalid_connection_method_returns_400(self, mock_client_cls):
+        """Invalid connection_method value returns 400 Bad Request."""
+        existing_record = {
+            "user_id": "user-123",
+            "current_step": "connection_method",
+            "completed_steps": ["welcome", "cluster_name"],
+            "step_timestamps": {},
+            "cluster_name": "my-cluster",
+            "connection_method": None,
+            "trust_mode": "approve",
+            "invited_emails": [],
+            "is_complete": False,
+        }
+
+        mock_instance = AsyncMock()
+        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_instance)
+        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+        mock_instance.get = AsyncMock(return_value=_mock_response(200, [existing_record]))
+
+        resp = client.patch(
+            "/api/v1/onboarding/step",
+            json={"step": "connection_method", "data": {"connection_method": "invalid_method"}},
+            headers=AUTH_HEADER,
+        )
+        assert resp.status_code == 400
+        assert "Invalid connection method" in resp.json()["detail"]
