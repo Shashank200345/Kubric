@@ -95,3 +95,8 @@
 **Vulnerability:** `update_progress` in `InsForgeClient` fetched a fallback `user_id` when not provided by querying `f"{self.base_url}/investigations?select=user_id&limit=1&user_id=not.is.null"` without filtering by `id=eq.{investigation_id}`. In a multi-tenant environment, this assigned an arbitrary user's ID to progress steps, corrupting ownership attribution.
 **Learning:** Admin-privileged fallback queries that retrieve parent record fields must filter by the parent record's primary key rather than taking an unscoped limit=1 result.
 **Prevention:** Always scope parent lookup queries in helper methods with `id=eq.{investigation_id}` when retrieving owner attributes.
+
+## 2026-11-28 - Validate Onboarding Step Payload Inputs Before PostgREST Persistence
+**Vulnerability:** `PATCH /api/v1/onboarding/step` accepted arbitrary `data` dictionary fields (such as `cluster_name` and `connection_method`) without validating data types or formatting patterns against domain rules prior to saving them in `user_onboarding` via admin PostgREST REST calls.
+**Learning:** Endpoint handlers that extract unvalidated values from request payloads and persist them via admin-privileged database clients expose downstream endpoints to filter injection and state corruption.
+**Prevention:** Validate step payload values against domain-specific regexes (`_CLUSTER_NAME_PATTERN`) and explicit enum value tuples before formatting PostgREST database patch payloads.
