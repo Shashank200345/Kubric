@@ -1,28 +1,25 @@
 """Unit tests for PATCH /api/v1/onboarding/step endpoint."""
 
 import base64
+import hashlib
+import hmac
 import json
 from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.api.onboarding import router
 from app.models.onboarding import ONBOARDING_STEPS
 
-# Minimal FastAPI app for testing
-from fastapi import FastAPI
-
 app = FastAPI()
 app.include_router(router)
 client = TestClient(app)
 
-
-import hmac
-import hashlib
-
 TEST_SECRET = "test-jwt-secret-key"
+
 
 def _make_jwt(sub: str = "12345678-1234-5678-1234-567812345678", secret: str = TEST_SECRET) -> str:
     """Create a signed JWT token for testing."""
@@ -44,12 +41,11 @@ AUTH_HEADER = {"Authorization": f"Bearer {_make_jwt()}"}
 
 def _mock_response(status_code: int = 200, json_data=None):
     """Create a mock httpx.Response."""
-    resp = httpx.Response(
+    return httpx.Response(
         status_code=status_code,
         json=json_data or [],
         request=httpx.Request("GET", "http://test"),
     )
-    return resp
 
 
 class TestUpdateOnboardingStep:
@@ -91,8 +87,6 @@ class TestUpdateOnboardingStep:
         mock_instance = AsyncMock()
         mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_instance)
         mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
-
-        # GET returns existing record with "welcome" already completed
         mock_instance.get = AsyncMock(return_value=_mock_response(200, [existing_record]))
 
         resp = client.patch(
@@ -104,7 +98,6 @@ class TestUpdateOnboardingStep:
         body = resp.json()
         assert body["current_step"] == "cluster_name"
         assert body["completed_steps"] == ["welcome"]
-        # PATCH should NOT have been called since it's a no-op
         mock_instance.patch.assert_not_called()
 
     @patch("app.api.onboarding.httpx.AsyncClient")
@@ -125,7 +118,6 @@ class TestUpdateOnboardingStep:
         mock_instance = AsyncMock()
         mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_instance)
         mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
-
         mock_instance.get = AsyncMock(return_value=_mock_response(200, [existing_record]))
         mock_instance.patch = AsyncMock(return_value=_mock_response(200, [{}]))
 
@@ -138,43 +130,6 @@ class TestUpdateOnboardingStep:
         body = resp.json()
         assert body["current_step"] == "cluster_name"
         assert "welcome" in body["completed_steps"]
-
-    @patch("app.api.onboarding.httpx.AsyncClient")
-    def test_step_specific_data_cluster_name(self, mock_client_cls):
-        """Completing the cluster_name step persists the cluster_name from data."""
-        existing_record = {
-            "user_id": "user-123",
-            "current_step": "cluster_name",
-            "completed_steps": ["welcome"],
-            "step_timestamps": {"welcome": "2025-01-15T10:30:00+00:00"},
-            "cluster_name": None,
-            "connection_method": None,
-            "trust_mode": "approve",
-            "invited_emails": [],
-            "is_complete": False,
-        }
-
-        mock_instance = AsyncMock()
-        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_instance)
-        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
-
-        mock_instance.get = AsyncMock(return_value=_mock_response(200, [existing_record]))
-        mock_instance.patch = AsyncMock(return_value=_mock_response(200, [{}]))
-
-        resp = client.patch(
-            "/api/v1/onboarding/step",
-            json={"step": "cluster_name", "data": {"cluster_name": "prod-eks"}},
-            headers=AUTH_HEADER,
-        )
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["current_step"] == "connection_method"
-        assert "cluster_name" in body["completed_steps"]
-
-        # Verify the PATCH payload included cluster_name
-        patch_call = mock_instance.patch.call_args
-        patch_json = patch_call.kwargs.get("json") or patch_call[1].get("json")
-        assert patch_json["cluster_name"] == "prod-eks"
 
     @patch("app.api.onboarding.httpx.AsyncClient")
     def test_creates_record_if_none_exists(self, mock_client_cls):
@@ -194,12 +149,8 @@ class TestUpdateOnboardingStep:
         mock_instance = AsyncMock()
         mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_instance)
         mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
-
-        # GET returns empty list (no record)
         mock_instance.get = AsyncMock(return_value=_mock_response(200, []))
-        # POST creates the record
         mock_instance.post = AsyncMock(return_value=_mock_response(201, [new_record]))
-        # PATCH updates it
         mock_instance.patch = AsyncMock(return_value=_mock_response(200, [{}]))
 
         resp = client.patch(
@@ -211,111 +162,23 @@ class TestUpdateOnboardingStep:
         body = resp.json()
         assert body["current_step"] == "cluster_name"
         assert "welcome" in body["completed_steps"]
-        # Verify POST was called to create the record
         mock_instance.post.assert_called_once()
 
+    @pytest.mark.parametrize(
+        "step,data,expected_key,expected_val",
+        [
+            ("cluster_name", {"cluster_name": "prod-eks"}, "cluster_name", "prod-eks"),
+            ("connection_method", {"connection_method": "cli"}, "connection_method", "cli"),
+            ("trust_mode", {"trust_mode": "auto"}, "trust_mode", "auto"),
+            ("team_invite", {"invited_emails": ["a@b.com", "c@d.com"]}, "invited_emails", ["a@b.com", "c@d.com"]),
+        ],
+    )
     @patch("app.api.onboarding.httpx.AsyncClient")
-    def test_step_specific_data_connection_method(self, mock_client_cls):
-        """Completing connection_method step persists the method from data."""
+    def test_step_specific_data_success(self, mock_client_cls, step, data, expected_key, expected_val):
+        """Completing onboarding steps persists step-specific payload fields."""
         existing_record = {
             "user_id": "user-123",
-            "current_step": "connection_method",
-            "completed_steps": ["welcome", "cluster_name"],
-            "step_timestamps": {},
-            "cluster_name": "my-cluster",
-            "connection_method": None,
-            "trust_mode": "approve",
-            "invited_emails": [],
-            "is_complete": False,
-        }
-
-        mock_instance = AsyncMock()
-        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_instance)
-        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
-
-        mock_instance.get = AsyncMock(return_value=_mock_response(200, [existing_record]))
-        mock_instance.patch = AsyncMock(return_value=_mock_response(200, [{}]))
-
-        resp = client.patch(
-            "/api/v1/onboarding/step",
-            json={"step": "connection_method", "data": {"connection_method": "cli"}},
-            headers=AUTH_HEADER,
-        )
-        assert resp.status_code == 200
-        patch_call = mock_instance.patch.call_args
-        patch_json = patch_call.kwargs.get("json") or patch_call[1].get("json")
-        assert patch_json["connection_method"] == "cli"
-
-    @patch("app.api.onboarding.httpx.AsyncClient")
-    def test_step_specific_data_trust_mode(self, mock_client_cls):
-        """Completing trust_mode step persists the mode from data."""
-        existing_record = {
-            "user_id": "user-123",
-            "current_step": "trust_mode",
-            "completed_steps": ["welcome", "cluster_name", "connection_method", "web_token", "cli"],
-            "step_timestamps": {},
-            "cluster_name": "my-cluster",
-            "connection_method": "web_token",
-            "trust_mode": "approve",
-            "invited_emails": [],
-            "is_complete": False,
-        }
-
-        mock_instance = AsyncMock()
-        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_instance)
-        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
-
-        mock_instance.get = AsyncMock(return_value=_mock_response(200, [existing_record]))
-        mock_instance.patch = AsyncMock(return_value=_mock_response(200, [{}]))
-
-        resp = client.patch(
-            "/api/v1/onboarding/step",
-            json={"step": "trust_mode", "data": {"trust_mode": "auto"}},
-            headers=AUTH_HEADER,
-        )
-        assert resp.status_code == 200
-        patch_call = mock_instance.patch.call_args
-        patch_json = patch_call.kwargs.get("json") or patch_call[1].get("json")
-        assert patch_json["trust_mode"] == "auto"
-
-    @patch("app.api.onboarding.httpx.AsyncClient")
-    def test_step_specific_data_team_invite(self, mock_client_cls):
-        """Completing team_invite step persists the invited_emails from data."""
-        existing_record = {
-            "user_id": "user-123",
-            "current_step": "team_invite",
-            "completed_steps": ["welcome", "cluster_name", "connection_method", "web_token", "cli", "trust_mode"],
-            "step_timestamps": {},
-            "cluster_name": "my-cluster",
-            "connection_method": "web_token",
-            "trust_mode": "approve",
-            "invited_emails": [],
-            "is_complete": False,
-        }
-
-        mock_instance = AsyncMock()
-        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_instance)
-        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
-
-        mock_instance.get = AsyncMock(return_value=_mock_response(200, [existing_record]))
-        mock_instance.patch = AsyncMock(return_value=_mock_response(200, [{}]))
-
-        resp = client.patch(
-            "/api/v1/onboarding/step",
-            json={"step": "team_invite", "data": {"invited_emails": ["a@b.com", "c@d.com"]}},
-            headers=AUTH_HEADER,
-        )
-        assert resp.status_code == 200
-        patch_call = mock_instance.patch.call_args
-        patch_json = patch_call.kwargs.get("json") or patch_call[1].get("json")
-        assert patch_json["invited_emails"] == ["a@b.com", "c@d.com"]
-
-    @patch("app.api.onboarding.httpx.AsyncClient")
-    def test_invalid_cluster_name_returns_400(self, mock_client_cls):
-        """Invalid cluster_name format returns 400 Bad Request."""
-        existing_record = {
-            "user_id": "user-123",
-            "current_step": "cluster_name",
+            "current_step": step,
             "completed_steps": ["welcome"],
             "step_timestamps": {},
             "cluster_name": None,
@@ -324,35 +187,46 @@ class TestUpdateOnboardingStep:
             "invited_emails": [],
             "is_complete": False,
         }
-
         mock_instance = AsyncMock()
         mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_instance)
         mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
         mock_instance.get = AsyncMock(return_value=_mock_response(200, [existing_record]))
+        mock_instance.patch = AsyncMock(return_value=_mock_response(200, [{}]))
 
         resp = client.patch(
             "/api/v1/onboarding/step",
-            json={"step": "cluster_name", "data": {"cluster_name": "cluster,user_id=neq.0"}},
+            json={"step": step, "data": data},
             headers=AUTH_HEADER,
         )
-        assert resp.status_code == 400
-        assert "Invalid cluster name" in resp.json()["detail"]
+        assert resp.status_code == 200
+        patch_call = mock_instance.patch.call_args
+        patch_json = patch_call.kwargs.get("json") or patch_call[1].get("json")
+        assert patch_json[expected_key] == expected_val
 
+    @pytest.mark.parametrize(
+        "step,data,expected_detail",
+        [
+            ("cluster_name", {"cluster_name": "cluster,user_id=neq.0"}, "Invalid cluster name"),
+            ("connection_method", {"connection_method": "invalid_method"}, "Invalid connection method"),
+            ("trust_mode", {"trust_mode": "invalid_mode"}, "Invalid trust mode"),
+            ("team_invite", {"invited_emails": "not-a-list@example.com"}, "Invalid invited emails list"),
+            ("team_invite", {"invited_emails": ["valid@example.com", "not-an-email"]}, "Invalid email format"),
+        ],
+    )
     @patch("app.api.onboarding.httpx.AsyncClient")
-    def test_invalid_connection_method_returns_400(self, mock_client_cls):
-        """Invalid connection_method value returns 400 Bad Request."""
+    def test_step_specific_data_validation_failures(self, mock_client_cls, step, data, expected_detail):
+        """Invalid step-specific data payloads return 400 Bad Request."""
         existing_record = {
             "user_id": "user-123",
-            "current_step": "connection_method",
-            "completed_steps": ["welcome", "cluster_name"],
+            "current_step": step,
+            "completed_steps": ["welcome"],
             "step_timestamps": {},
-            "cluster_name": "my-cluster",
+            "cluster_name": None,
             "connection_method": None,
             "trust_mode": "approve",
             "invited_emails": [],
             "is_complete": False,
         }
-
         mock_instance = AsyncMock()
         mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_instance)
         mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
@@ -360,92 +234,8 @@ class TestUpdateOnboardingStep:
 
         resp = client.patch(
             "/api/v1/onboarding/step",
-            json={"step": "connection_method", "data": {"connection_method": "invalid_method"}},
+            json={"step": step, "data": data},
             headers=AUTH_HEADER,
         )
         assert resp.status_code == 400
-        assert "Invalid connection method" in resp.json()["detail"]
-
-    @patch("app.api.onboarding.httpx.AsyncClient")
-    def test_invalid_trust_mode_returns_400(self, mock_client_cls):
-        """Invalid trust_mode value returns 400 Bad Request."""
-        existing_record = {
-            "user_id": "user-123",
-            "current_step": "trust_mode",
-            "completed_steps": ["welcome", "cluster_name", "connection_method", "web_token", "cli"],
-            "step_timestamps": {},
-            "cluster_name": "my-cluster",
-            "connection_method": "web_token",
-            "trust_mode": "approve",
-            "invited_emails": [],
-            "is_complete": False,
-        }
-
-        mock_instance = AsyncMock()
-        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_instance)
-        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
-        mock_instance.get = AsyncMock(return_value=_mock_response(200, [existing_record]))
-
-        resp = client.patch(
-            "/api/v1/onboarding/step",
-            json={"step": "trust_mode", "data": {"trust_mode": "invalid_mode"}},
-            headers=AUTH_HEADER,
-        )
-        assert resp.status_code == 400
-        assert "Invalid trust mode" in resp.json()["detail"]
-
-    @patch("app.api.onboarding.httpx.AsyncClient")
-    def test_invalid_invited_emails_not_list_returns_400(self, mock_client_cls):
-        """Non-list invited_emails value returns 400 Bad Request."""
-        existing_record = {
-            "user_id": "user-123",
-            "current_step": "team_invite",
-            "completed_steps": ["welcome", "cluster_name", "connection_method", "web_token", "cli", "trust_mode"],
-            "step_timestamps": {},
-            "cluster_name": "my-cluster",
-            "connection_method": "web_token",
-            "trust_mode": "approve",
-            "invited_emails": [],
-            "is_complete": False,
-        }
-
-        mock_instance = AsyncMock()
-        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_instance)
-        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
-        mock_instance.get = AsyncMock(return_value=_mock_response(200, [existing_record]))
-
-        resp = client.patch(
-            "/api/v1/onboarding/step",
-            json={"step": "team_invite", "data": {"invited_emails": "not-a-list@example.com"}},
-            headers=AUTH_HEADER,
-        )
-        assert resp.status_code == 400
-        assert "Invalid invited emails list" in resp.json()["detail"]
-
-    @patch("app.api.onboarding.httpx.AsyncClient")
-    def test_invalid_invited_emails_malformed_email_returns_400(self, mock_client_cls):
-        """Malformed email in invited_emails list returns 400 Bad Request."""
-        existing_record = {
-            "user_id": "user-123",
-            "current_step": "team_invite",
-            "completed_steps": ["welcome", "cluster_name", "connection_method", "web_token", "cli", "trust_mode"],
-            "step_timestamps": {},
-            "cluster_name": "my-cluster",
-            "connection_method": "web_token",
-            "trust_mode": "approve",
-            "invited_emails": [],
-            "is_complete": False,
-        }
-
-        mock_instance = AsyncMock()
-        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_instance)
-        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
-        mock_instance.get = AsyncMock(return_value=_mock_response(200, [existing_record]))
-
-        resp = client.patch(
-            "/api/v1/onboarding/step",
-            json={"step": "team_invite", "data": {"invited_emails": ["valid@example.com", "not-an-email"]}},
-            headers=AUTH_HEADER,
-        )
-        assert resp.status_code == 400
-        assert "Invalid email format" in resp.json()["detail"]
+        assert expected_detail in resp.json()["detail"]
