@@ -365,3 +365,87 @@ class TestUpdateOnboardingStep:
         )
         assert resp.status_code == 400
         assert "Invalid connection method" in resp.json()["detail"]
+
+    @patch("app.api.onboarding.httpx.AsyncClient")
+    def test_invalid_trust_mode_returns_400(self, mock_client_cls):
+        """Invalid trust_mode value returns 400 Bad Request."""
+        existing_record = {
+            "user_id": "user-123",
+            "current_step": "trust_mode",
+            "completed_steps": ["welcome", "cluster_name", "connection_method", "web_token", "cli"],
+            "step_timestamps": {},
+            "cluster_name": "my-cluster",
+            "connection_method": "web_token",
+            "trust_mode": "approve",
+            "invited_emails": [],
+            "is_complete": False,
+        }
+
+        mock_instance = AsyncMock()
+        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_instance)
+        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+        mock_instance.get = AsyncMock(return_value=_mock_response(200, [existing_record]))
+
+        resp = client.patch(
+            "/api/v1/onboarding/step",
+            json={"step": "trust_mode", "data": {"trust_mode": "invalid_mode"}},
+            headers=AUTH_HEADER,
+        )
+        assert resp.status_code == 400
+        assert "Invalid trust mode" in resp.json()["detail"]
+
+    @patch("app.api.onboarding.httpx.AsyncClient")
+    def test_invalid_invited_emails_not_list_returns_400(self, mock_client_cls):
+        """Non-list invited_emails value returns 400 Bad Request."""
+        existing_record = {
+            "user_id": "user-123",
+            "current_step": "team_invite",
+            "completed_steps": ["welcome", "cluster_name", "connection_method", "web_token", "cli", "trust_mode"],
+            "step_timestamps": {},
+            "cluster_name": "my-cluster",
+            "connection_method": "web_token",
+            "trust_mode": "approve",
+            "invited_emails": [],
+            "is_complete": False,
+        }
+
+        mock_instance = AsyncMock()
+        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_instance)
+        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+        mock_instance.get = AsyncMock(return_value=_mock_response(200, [existing_record]))
+
+        resp = client.patch(
+            "/api/v1/onboarding/step",
+            json={"step": "team_invite", "data": {"invited_emails": "not-a-list@example.com"}},
+            headers=AUTH_HEADER,
+        )
+        assert resp.status_code == 400
+        assert "Invalid invited emails list" in resp.json()["detail"]
+
+    @patch("app.api.onboarding.httpx.AsyncClient")
+    def test_invalid_invited_emails_malformed_email_returns_400(self, mock_client_cls):
+        """Malformed email in invited_emails list returns 400 Bad Request."""
+        existing_record = {
+            "user_id": "user-123",
+            "current_step": "team_invite",
+            "completed_steps": ["welcome", "cluster_name", "connection_method", "web_token", "cli", "trust_mode"],
+            "step_timestamps": {},
+            "cluster_name": "my-cluster",
+            "connection_method": "web_token",
+            "trust_mode": "approve",
+            "invited_emails": [],
+            "is_complete": False,
+        }
+
+        mock_instance = AsyncMock()
+        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_instance)
+        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+        mock_instance.get = AsyncMock(return_value=_mock_response(200, [existing_record]))
+
+        resp = client.patch(
+            "/api/v1/onboarding/step",
+            json={"step": "team_invite", "data": {"invited_emails": ["valid@example.com", "not-an-email"]}},
+            headers=AUTH_HEADER,
+        )
+        assert resp.status_code == 400
+        assert "Invalid email format" in resp.json()["detail"]

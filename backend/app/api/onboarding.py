@@ -248,9 +248,24 @@ async def update_onboarding_step(
                 raise HTTPException(status_code=400, detail="Invalid connection method")
             patch_payload["connection_method"] = c_method
         elif request.step == "trust_mode" and "trust_mode" in request.data:
-            patch_payload["trust_mode"] = request.data["trust_mode"]
+            t_mode = request.data["trust_mode"]
+            if t_mode is not None and t_mode not in ("suggest", "approve", "auto"):
+                raise HTTPException(status_code=400, detail="Invalid trust mode")
+            patch_payload["trust_mode"] = t_mode
         elif request.step == "team_invite" and "invited_emails" in request.data:
-            patch_payload["invited_emails"] = request.data["invited_emails"]
+            emails = request.data["invited_emails"]
+            if emails is not None:
+                if not isinstance(emails, list) or len(emails) > 20:
+                    raise HTTPException(status_code=400, detail="Invalid invited emails list")
+                from email_validator import validate_email, EmailNotValidError
+                for email in emails:
+                    if not isinstance(email, str):
+                        raise HTTPException(status_code=400, detail="Invalid email format")
+                    try:
+                        validate_email(email, check_deliverability=False)
+                    except EmailNotValidError:
+                        raise HTTPException(status_code=400, detail="Invalid email format")
+            patch_payload["invited_emails"] = emails
 
         # 7. PATCH the record via PostgREST
         patch_resp = await client.patch(
