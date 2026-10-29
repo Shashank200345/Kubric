@@ -242,6 +242,36 @@ async def test_complete_investigation_user_id_scoping(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_get_pending_actions_user_id_scoping(monkeypatch):
+    monkeypatch.setenv("INSFORGE_URL", "https://mock.insforge.app")
+    monkeypatch.setenv("INSFORGE_API_KEY", "mock-key")
+
+    insforge = InsForgeClient()
+    user_id = "87654321-4321-8765-4321-876543218765"
+    cluster_name = "test-cluster"
+    action_id = "11112222-3333-4444-5555-666677778888"
+
+    with patch("httpx.AsyncClient.get") as mock_get, patch("httpx.AsyncClient.patch") as mock_patch:
+        mock_get_resp = AsyncMock()
+        mock_get_resp.raise_for_status = lambda: None
+        mock_get_resp.json = lambda: [{"id": action_id, "action_type": "restart_pod"}]
+        mock_get.return_value = mock_get_resp
+
+        mock_patch_resp = AsyncMock()
+        mock_patch_resp.raise_for_status = lambda: None
+        mock_patch.return_value = mock_patch_resp
+
+        actions = await insforge.get_pending_actions(user_id, cluster_name)
+        assert len(actions) == 1
+        assert actions[0]["id"] == action_id
+
+        mock_patch.assert_called_once()
+        args, kwargs = mock_patch.call_args
+        assert f"actions?id=in.({action_id})&user_id=eq.{user_id}" in args[0]
+        assert kwargs.get("json") == {"status": "in_progress"}
+
+
+@pytest.mark.asyncio
 async def test_update_action_result_user_id_scoping(monkeypatch):
     monkeypatch.setenv("INSFORGE_URL", "https://mock.insforge.app")
     monkeypatch.setenv("INSFORGE_API_KEY", "mock-key")
