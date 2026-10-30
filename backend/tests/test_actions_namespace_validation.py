@@ -117,10 +117,11 @@ def test_create_action_allowed_namespace():
 def test_build_action_argv_flag_injection_prevention():
     from app.main import _build_action_argv
 
-    # Flag injection attempts via pod_name or env_name
+    # Flag injection attempts via pod_name, env_name, or env_value
     assert _build_action_argv("restart_pod", {"namespace": "default", "pod_name": "--all"}, None) is None
     assert _build_action_argv("scale_deployment", {"namespace": "default", "deployment_name": "--selector=app", "replicas": 2}, None) is None
     assert _build_action_argv("update_environment_variable", {"namespace": "default", "deployment_name": "web", "env_name": "--all", "env_value": "x"}, None) is None
+    assert _build_action_argv("update_environment_variable", {"namespace": "default", "deployment_name": "web", "env_name": "VAR", "env_value": "--all"}, None) is None
     assert _build_action_argv("update_environment_variable", {"namespace": "default", "deployment_name": "web", "env_name": "INVALID-NAME", "env_value": "x"}, None) is None
 
     # Validation for target_revision, resource limits, and replicas

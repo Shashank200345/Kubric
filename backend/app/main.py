@@ -527,7 +527,7 @@ def _build_action_argv(action_type: str, params: Dict[str, Any], context: Option
         container = str(params.get("container_name") or "")
         env_name = str(params.get("env_name") or "")
         env_value = str(params.get("env_value") or "")
-        if not dep or dep.startswith("-") or not env_name or not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", env_name):
+        if not dep or dep.startswith("-") or not env_name or not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", env_name) or env_value.startswith("-"):
             return None
         argv = base + ["set", "env", f"deployment/{dep}"]
         if container:
