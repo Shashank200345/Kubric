@@ -100,3 +100,8 @@
 **Vulnerability:** `PATCH /api/v1/onboarding/step` accepted arbitrary `data` dictionary fields (such as `cluster_name` and `connection_method`) without validating data types or formatting patterns against domain rules prior to saving them in `user_onboarding` via admin PostgREST REST calls.
 **Learning:** Endpoint handlers that extract unvalidated values from request payloads and persist them via admin-privileged database clients expose downstream endpoints to filter injection and state corruption.
 **Prevention:** Validate step payload values against domain-specific regexes (`_CLUSTER_NAME_PATTERN`) and explicit enum value tuples before formatting PostgREST database patch payloads.
+
+## 2026-12-05 - Validate trust_mode Input Against Allowed Values in update_onboarding_step
+**Vulnerability:** `PATCH /api/v1/onboarding/step` accepted arbitrary values for `trust_mode` in request payloads without validating against the database check constraint (`CHECK (trust_mode IN ('suggest', 'approve', 'auto'))`), causing unhandled database exceptions and allowing invalid state persistence.
+**Learning:** Handlers persisting user-provided configuration state via admin-privileged database clients must explicitly validate enum parameters against database constraint allowed values.
+**Prevention:** Enforce whitelist validation against allowed values (`("suggest", "approve", "auto")`) and reject invalid inputs with HTTP 400 Bad Request before database persistence.
