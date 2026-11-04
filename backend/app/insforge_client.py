@@ -231,7 +231,7 @@ class InsForgeClient:
                     action_ids = [action['id'] for action in actions]
                     ids_str = ",".join(action_ids)
                     await client.patch(
-                        f"{self.base_url}/actions?id=in.({ids_str})",
+                        f"{self.base_url}/actions?id=in.({ids_str})&user_id=eq.{user_id}",
                         headers=self.headers,
                         json={"status": "in_progress"}
                     )
