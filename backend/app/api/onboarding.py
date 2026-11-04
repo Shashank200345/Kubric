@@ -25,6 +25,7 @@ from typing import Optional
 from app.insforge_client import _is_uuid
 
 _CLUSTER_NAME_PATTERN = re.compile(r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")
+_EMAIL_PATTERN = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
 from app.models.onboarding import (
     ONBOARDING_STEPS,
     ClusterTokenRequest,
@@ -50,6 +51,36 @@ def _admin_headers() -> dict:
         "Content-Type": "application/json",
         "Prefer": "return=representation",
     }
+
+
+def _validate_step_payload(step: str, data: dict) -> dict:
+    """Validate step-specific input data and return payload updates."""
+    updates: dict = {}
+    if step == "cluster_name" and "cluster_name" in data:
+        val = data["cluster_name"]
+        if val is not None and (not isinstance(val, str) or not _CLUSTER_NAME_PATTERN.match(val)):
+            raise HTTPException(status_code=400, detail="Invalid cluster name format")
+        updates["cluster_name"] = val
+    elif step == "connection_method" and "connection_method" in data:
+        val = data["connection_method"]
+        if val is not None and val not in ("web_token", "cli"):
+            raise HTTPException(status_code=400, detail="Invalid connection method")
+        updates["connection_method"] = val
+    elif step == "trust_mode" and "trust_mode" in data:
+        val = data["trust_mode"]
+        if val is not None and val not in ("suggest", "approve", "auto"):
+            raise HTTPException(status_code=400, detail="Invalid trust mode")
+        updates["trust_mode"] = val
+    elif step == "team_invite" and "invited_emails" in data:
+        emails = data["invited_emails"]
+        if emails is not None:
+            if not isinstance(emails, list) or len(emails) > 20:
+                raise HTTPException(status_code=400, detail="Invalid invited emails list")
+            for email in emails:
+                if not isinstance(email, str) or not _EMAIL_PATTERN.match(email):
+                    raise HTTPException(status_code=400, detail="Invalid email format")
+        updates["invited_emails"] = emails
+    return updates
 
 
 async def get_current_user(authorization: Optional[str] = Header(None)) -> str:
@@ -236,21 +267,7 @@ async def update_onboarding_step(
             patch_payload["is_complete"] = True
 
         # Persist step-specific data from request.data with strict input validation
-        if request.step == "cluster_name" and "cluster_name" in request.data:
-            c_name = request.data["cluster_name"]
-            if c_name is not None:
-                if not isinstance(c_name, str) or not _CLUSTER_NAME_PATTERN.match(c_name):
-                    raise HTTPException(status_code=400, detail="Invalid cluster name format")
-            patch_payload["cluster_name"] = c_name
-        elif request.step == "connection_method" and "connection_method" in request.data:
-            c_method = request.data["connection_method"]
-            if c_method is not None and c_method not in ("web_token", "cli"):
-                raise HTTPException(status_code=400, detail="Invalid connection method")
-            patch_payload["connection_method"] = c_method
-        elif request.step == "trust_mode" and "trust_mode" in request.data:
-            patch_payload["trust_mode"] = request.data["trust_mode"]
-        elif request.step == "team_invite" and "invited_emails" in request.data:
-            patch_payload["invited_emails"] = request.data["invited_emails"]
+        patch_payload.update(_validate_step_payload(request.step, request.data))
 
         # 7. PATCH the record via PostgREST
         patch_resp = await client.patch(
