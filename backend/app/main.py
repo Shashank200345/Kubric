@@ -816,7 +816,7 @@ async def _record_heartbeat(cluster_token: str, user_id: str):
         # 1. Update clusters.last_heartbeat_at
         try:
             resp = await http_client.patch(
-                f"{base_url}/clusters?cluster_token=eq.{cluster_token}",
+                f"{base_url}/clusters?cluster_token=eq.{cluster_token}&user_id=eq.{user_id}",
                 headers=headers,
                 json={"last_heartbeat_at": now_iso},
             )

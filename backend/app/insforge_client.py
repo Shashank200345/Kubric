@@ -228,13 +228,14 @@ class InsForgeClient:
                 
                 # 2. Update their status to in_progress to avoid race conditions
                 if actions:
-                    action_ids = [action['id'] for action in actions]
-                    ids_str = ",".join(action_ids)
-                    await client.patch(
-                        f"{self.base_url}/actions?id=in.({ids_str})",
-                        headers=self.headers,
-                        json={"status": "in_progress"}
-                    )
+                    valid_action_ids = [a["id"] for a in actions if isinstance(a, dict) and _is_uuid(a.get("id"))]
+                    if valid_action_ids:
+                        ids_str = ",".join(valid_action_ids)
+                        await client.patch(
+                            f"{self.base_url}/actions?id=in.({ids_str})&user_id=eq.{user_id}",
+                            headers=self.headers,
+                            json={"status": "in_progress"}
+                        )
                 
                 return actions
             except Exception as e:

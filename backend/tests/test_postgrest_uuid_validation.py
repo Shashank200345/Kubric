@@ -368,3 +368,59 @@ def test_get_action_status_uuid_validation(monkeypatch):
 
         # Verify InsForgeClient was not queried for invalid action IDs
         mock_instance.get_action.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_get_pending_actions_uuid_validation_and_user_scoping(monkeypatch):
+    monkeypatch.setenv("INSFORGE_URL", "https://mock.insforge.app")
+    monkeypatch.setenv("INSFORGE_API_KEY", "mock-key")
+
+    insforge = InsForgeClient()
+    user_id = "87654321-4321-8765-4321-876543218765"
+    valid_action_id = "22222222-2222-2222-2222-222222222222"
+
+    with patch("httpx.AsyncClient.get") as mock_get, patch("httpx.AsyncClient.patch") as mock_patch:
+        # Case 1: Database returns valid action ID and invalid action ID
+        mock_get_resp = AsyncMock()
+        mock_get_resp.raise_for_status = lambda: None
+        mock_get_resp.json = lambda: [
+            {"id": valid_action_id, "action_type": "restart_pod"},
+            {"id": "invalid_action_id", "action_type": "scale_deployment"},
+        ]
+        mock_get.return_value = mock_get_resp
+
+        mock_patch_resp = AsyncMock()
+        mock_patch_resp.raise_for_status = lambda: None
+        mock_patch.return_value = mock_patch_resp
+
+        actions = await insforge.get_pending_actions(user_id, "test-cluster")
+        assert len(actions) == 2
+
+        # Verify PATCH query contains only valid_action_id and is scoped to user_id
+        mock_patch.assert_called_once()
+        patch_args, _ = mock_patch.call_args
+        assert f"actions?id=in.({valid_action_id})&user_id=eq.{user_id}" in patch_args[0]
+
+
+@pytest.mark.asyncio
+async def test_record_heartbeat_user_scoping(monkeypatch):
+    monkeypatch.setenv("INSFORGE_URL", "https://mock.insforge.app")
+    monkeypatch.setenv("INSFORGE_API_KEY", "mock-key")
+
+    from app.main import _record_heartbeat
+
+    user_id = "87654321-4321-8765-4321-876543218765"
+    cluster_token = VALID_UUID
+
+    with patch("httpx.AsyncClient.patch") as mock_patch, patch("httpx.AsyncClient.get") as mock_get:
+        mock_resp = AsyncMock()
+        mock_resp.raise_for_status = lambda: None
+        mock_resp.json = lambda: []
+        mock_patch.return_value = mock_resp
+        mock_get.return_value = mock_resp
+
+        await _record_heartbeat(cluster_token, user_id)
+
+        assert mock_patch.called
+        patch_args, _ = mock_patch.call_args
+        assert f"clusters?cluster_token=eq.{cluster_token}&user_id=eq.{user_id}" in patch_args[0]
