@@ -100,3 +100,8 @@
 **Vulnerability:** `PATCH /api/v1/onboarding/step` accepted arbitrary `data` dictionary fields (such as `cluster_name` and `connection_method`) without validating data types or formatting patterns against domain rules prior to saving them in `user_onboarding` via admin PostgREST REST calls.
 **Learning:** Endpoint handlers that extract unvalidated values from request payloads and persist them via admin-privileged database clients expose downstream endpoints to filter injection and state corruption.
 **Prevention:** Validate step payload values against domain-specific regexes (`_CLUSTER_NAME_PATTERN`) and explicit enum value tuples before formatting PostgREST database patch payloads.
+
+## 2026-12-08 - Enforce Cryptographic JWT Verification on CLI Endpoints
+**Vulnerability:** `cli_connect_cluster` (`POST /v1/clusters/connect`) and `cli_get_status` (`GET /v1/status`) in `backend/app/main.py` checked only `if not authorization:` for authentication, permitting arbitrary unverified strings or forged Bearer tokens to access cluster registration (generating agent tokens) and cluster status inspection.
+**Learning:** Checking solely for the presence of an Authorization header without cryptographically verifying JWT signatures, expiration, and algorithm allows trivial authentication bypass.
+**Prevention:** Always verify incoming tokens cryptographically with `_user_id_from_jwt(authorization)` and ensure a valid user ID is returned before granting access to sensitive or administrative endpoints.
