@@ -2,7 +2,7 @@ import os
 from datetime import datetime, timezone
 
 import httpx
-from fastapi import FastAPI, BackgroundTasks, Header, HTTPException
+from fastapi import FastAPI, BackgroundTasks, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
@@ -1485,7 +1485,11 @@ async def get_nodes(context: Optional[str] = None, authorization: Optional[str] 
 
 
 @app.get("/events")
-async def get_events(context: Optional[str] = None, limit: int = 30, authorization: Optional[str] = Header(None)):
+async def get_events(
+    context: Optional[str] = None,
+    limit: int = Query(default=30, ge=1, le=100),
+    authorization: Optional[str] = Header(None)
+):
     """Returns recent real Kubernetes events across all namespaces."""
     if context:
         from app.insforge_client import _is_cluster_name
