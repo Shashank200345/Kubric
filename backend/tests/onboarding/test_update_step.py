@@ -365,3 +365,39 @@ class TestUpdateOnboardingStep:
         )
         assert resp.status_code == 400
         assert "Invalid connection method" in resp.json()["detail"]
+
+    @patch("app.api.onboarding.httpx.AsyncClient")
+    def test_invalid_trust_mode_returns_400(self, mock_client_cls):
+        """Invalid trust_mode value returns 400 Bad Request."""
+        existing_record = {
+            "user_id": "user-123",
+            "current_step": "trust_mode",
+            "completed_steps": ["welcome", "cluster_name", "connection_method", "web_token", "cli"],
+            "step_timestamps": {},
+            "cluster_name": "my-cluster",
+            "connection_method": "web_token",
+            "trust_mode": "approve",
+            "invited_emails": [],
+            "is_complete": False,
+        }
+
+        mock_instance = AsyncMock()
+        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_instance)
+        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+        mock_instance.get = AsyncMock(return_value=_mock_response(200, [existing_record]))
+
+        invalid_modes = [
+            "invalid_mode",
+            "approve; DROP TABLE user_onboarding;",
+            "auto,id=neq.0",
+            123,
+            ["auto"],
+        ]
+        for mode in invalid_modes:
+            resp = client.patch(
+                "/api/v1/onboarding/step",
+                json={"step": "trust_mode", "data": {"trust_mode": mode}},
+                headers=AUTH_HEADER,
+            )
+            assert resp.status_code == 400
+            assert resp.json() == {"detail": "Invalid trust mode"}
