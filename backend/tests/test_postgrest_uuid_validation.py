@@ -368,3 +368,72 @@ def test_get_action_status_uuid_validation(monkeypatch):
 
         # Verify InsForgeClient was not queried for invalid action IDs
         mock_instance.get_action.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_get_pending_actions_user_id_scoping_and_uuid_validation(monkeypatch):
+    monkeypatch.setenv("INSFORGE_URL", "https://mock.insforge.app")
+    monkeypatch.setenv("INSFORGE_API_KEY", "mock-key")
+
+    insforge = InsForgeClient()
+    user_id = VALID_UUID
+    cluster_name = "prod-cluster"
+    action_1 = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    action_2 = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+    invalid_action = "invalid_id,status=eq.done"
+
+    with patch("httpx.AsyncClient.get") as mock_get, patch("httpx.AsyncClient.patch") as mock_patch:
+        # Case 1: All actions have valid UUIDs
+        mock_get_resp = AsyncMock()
+        mock_get_resp.raise_for_status = lambda: None
+        mock_get_resp.json = lambda: [
+            {"id": action_1, "status": "pending"},
+            {"id": action_2, "status": "pending"},
+        ]
+        mock_get.return_value = mock_get_resp
+
+        mock_patch_resp = AsyncMock()
+        mock_patch_resp.raise_for_status = lambda: None
+        mock_patch.return_value = mock_patch_resp
+
+        actions = await insforge.get_pending_actions(user_id, cluster_name)
+        assert len(actions) == 2
+        mock_patch.assert_called_once()
+        patch_args, patch_kwargs = mock_patch.call_args
+        assert f"actions?id=in.({action_1},{action_2})&user_id=eq.{user_id}" in patch_args[0]
+        assert patch_kwargs.get("json") == {"status": "in_progress"}
+
+    with patch("httpx.AsyncClient.get") as mock_get, patch("httpx.AsyncClient.patch") as mock_patch:
+        # Case 2: Actions contain invalid or malicious non-UUID action ID
+        mock_get_resp = AsyncMock()
+        mock_get_resp.raise_for_status = lambda: None
+        mock_get_resp.json = lambda: [
+            {"id": action_1, "status": "pending"},
+            {"id": invalid_action, "status": "pending"},
+        ]
+        mock_get.return_value = mock_get_resp
+
+        mock_patch_resp = AsyncMock()
+        mock_patch_resp.raise_for_status = lambda: None
+        mock_patch.return_value = mock_patch_resp
+
+        actions = await insforge.get_pending_actions(user_id, cluster_name)
+        assert len(actions) == 2
+        mock_patch.assert_called_once()
+        patch_args, patch_kwargs = mock_patch.call_args
+        # Only the valid UUID should be included, scoped to user_id
+        assert f"actions?id=in.({action_1})&user_id=eq.{user_id}" in patch_args[0]
+        assert invalid_action not in patch_args[0]
+
+    with patch("httpx.AsyncClient.get") as mock_get, patch("httpx.AsyncClient.patch") as mock_patch:
+        # Case 3: Actions contain ONLY non-UUID action IDs -> no patch call
+        mock_get_resp = AsyncMock()
+        mock_get_resp.raise_for_status = lambda: None
+        mock_get_resp.json = lambda: [
+            {"id": invalid_action, "status": "pending"},
+        ]
+        mock_get.return_value = mock_get_resp
+
+        actions = await insforge.get_pending_actions(user_id, cluster_name)
+        assert len(actions) == 1
+        mock_patch.assert_not_called()
