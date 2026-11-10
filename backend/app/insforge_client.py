@@ -226,15 +226,19 @@ class InsForgeClient:
                 resp.raise_for_status()
                 actions = resp.json()
                 
-                # 2. Update their status to in_progress to avoid race conditions
+                # 2. Update their status to in_progress to avoid race conditions (scoped to user_id and validating UUID format)
                 if actions:
-                    action_ids = [action['id'] for action in actions]
-                    ids_str = ",".join(action_ids)
-                    await client.patch(
-                        f"{self.base_url}/actions?id=in.({ids_str})",
-                        headers=self.headers,
-                        json={"status": "in_progress"}
-                    )
+                    valid_action_ids = [
+                        action['id'] for action in actions
+                        if action.get('id') and _is_uuid(action['id'])
+                    ]
+                    if valid_action_ids:
+                        ids_str = ",".join(valid_action_ids)
+                        await client.patch(
+                            f"{self.base_url}/actions?id=in.({ids_str})&user_id=eq.{user_id}",
+                            headers=self.headers,
+                            json={"status": "in_progress"}
+                        )
                 
                 return actions
             except Exception as e:

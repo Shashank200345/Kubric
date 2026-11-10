@@ -100,3 +100,8 @@
 **Vulnerability:** `PATCH /api/v1/onboarding/step` accepted arbitrary `data` dictionary fields (such as `cluster_name` and `connection_method`) without validating data types or formatting patterns against domain rules prior to saving them in `user_onboarding` via admin PostgREST REST calls.
 **Learning:** Endpoint handlers that extract unvalidated values from request payloads and persist them via admin-privileged database clients expose downstream endpoints to filter injection and state corruption.
 **Prevention:** Validate step payload values against domain-specific regexes (`_CLUSTER_NAME_PATTERN`) and explicit enum value tuples before formatting PostgREST database patch payloads.
+
+## 2026-12-04 - Enforce User ID Ownership Scope and UUID Validation in get_pending_actions
+**Vulnerability:** `get_pending_actions` in `InsForgeClient` updated action status to `in_progress` using `f"{self.base_url}/actions?id=in.({ids_str})"` with admin service-role API credentials without scoping the query to `user_id` or validating that each action ID in `ids_str` was a valid UUID, allowing potential cross-tenant status modification and PostgREST filter injection.
+**Learning:** Admin-privileged batch PATCH operations in PostgREST that modify record statuses based solely on an `id=in.(...)` list must validate each list element against UUID format and strictly scope updates by `user_id=eq.{user_id}` to prevent IDOR and query filter manipulation.
+**Prevention:** Filter candidate record IDs through `_is_uuid` and explicitly append `&user_id=eq.{user_id}` to admin batch update URLs.
